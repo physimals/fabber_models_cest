@@ -12,35 +12,29 @@
 using namespace std;
 
 class CESTFwdModel : public FwdModel {
-public: 
+public:
+  static FwdModel* NewInstance();
+  
   // Virtual function overrides
+  virtual void Initialize(ArgsType& args);
   virtual void Evaluate(const ColumnVector& params, 
 			      ColumnVector& result) const;
-  void Initialise(MVNDist& posterior) const;
-
-   static void ModelUsage();
-  virtual string ModelVersion() const;
+   virtual vector<string> GetUsage() const;
+   virtual string ModelVersion() const;
                   
-  virtual void DumpParameters(const ColumnVector& vec,
+   virtual void DumpParameters(const ColumnVector& vec,
                                 const string& indents = "") const;
                                 
-  virtual void NameParams(vector<string>& names) const;     
-  virtual int NumParams() const 
-  { return (3*npool - 1) + 1 + ( inferdrift?1:0 ) + ( t12soft? (2*npool):0 ) + (3*nexpool);
-  } 
-
-  virtual ~CESTFwdModel() { return; }
-
-  virtual void HardcodedInitialDists(MVNDist& prior, MVNDist& posterior) const;
-
-  using FwdModel::SetupARD;
-  virtual void SetupARD(const MVNDist& posterior, MVNDist& prior, double& Fard);
-  virtual void UpdateARD(const MVNDist& posterior, MVNDist& prior, double& Fard) const;
-
-
-  // Constructor
-  CESTFwdModel(ArgsType& args);
-
+   virtual void NameParams(vector<string>& names) const;     
+   virtual int NumParams() const 
+   { return (3*npool - 1) + 1 + ( inferdrift?1:0 ) + ( t12soft? (2*npool):0 ) + (3*nexpool);
+   } 
+   
+   virtual ~CESTFwdModel() { return; }
+   
+   virtual void HardcodedInitialDists(MVNDist& prior, MVNDist& posterior) const;
+   virtual void InitParams(MVNDist& posterior) const;
+   
 
 protected: 
   //specific functions
@@ -111,5 +105,10 @@ protected:
   
   // ard flags
   bool doard;
+
+  private:
+  /** Auto-register with forward model factory. */
+  static FactoryRegistration<FwdModelFactory, CESTFwdModel> registration;
+
  
 };

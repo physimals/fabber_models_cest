@@ -16,6 +16,9 @@
 using namespace NEWIMAGE;
 #include "fabbercore/easylog.h"
 
+FactoryRegistration<FwdModelFactory, CESTFwdModel> 
+  CESTFwdModel::registration("cest");
+
 string CESTFwdModel::ModelVersion() const
 {
   return "$Id: fwdmodel_cest.cc,v 1.8 2015/01/29 12:19:08 chappell Exp $";
@@ -201,9 +204,9 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist& prior,
 }    
     
 
-void CESTFwdModel::Initialise(MVNDist& posterior) const
+void CESTFwdModel::InitParams(MVNDist& posterior) const
 {
-  Tracer_Plus tr("CESTFwdModel::Initialise");
+  Tracer_Plus tr("CESTFwdModel::InitParams");
 
   //load the existing precisions as the basis for any update
   SymmetricMatrix precisions;
@@ -519,10 +522,16 @@ void CESTFwdModel::Evaluate(const ColumnVector& params, ColumnVector& result) co
   return;
 }
 
-
-CESTFwdModel::CESTFwdModel(ArgsType& args)
+FwdModel* CESTFwdModel::NewInstance()
 {
-  Tracer_Plus tr("CESTFwdModel");
+  return new CESTFwdModel();
+}
+
+
+
+void CESTFwdModel::Initialize(ArgsType& args)
+{
+  Tracer_Plus tr("CESTFwdModel:Initialize");
 
     string scanParams = args.ReadWithDefault("scan-params","cmdline");
 
@@ -741,11 +750,13 @@ CESTFwdModel::CESTFwdModel(ArgsType& args)
     
 }
 
-void CESTFwdModel::ModelUsage()
-{ 
-  cout << "\nUsage info for --model=CEST:\n"
-       << "Undefined\n"
-    ;
+vector<string> CESTFwdModel::GetUsage() const
+{
+  vector<string> usage;
+  usage.push_back( "\nUsage info for --model=cest:\n");
+  usage.push_back( "Undefined\n");
+
+  return usage;
 }
 
 void CESTFwdModel::DumpParameters(const ColumnVector& vec,
@@ -808,73 +819,7 @@ void CESTFwdModel::NameParams(vector<string>& names) const
 
 }
 
-void CESTFwdModel::SetupARD( const MVNDist& theta, MVNDist& thetaPrior, double& Fard)
-{
-  Tracer_Plus tr("CESTFwdModel::SetupARD");
 
-  if (doard)
-    {
-      //sort out ARD indices
-
-      Fard = 0;
-
-      int ardindex;
-      for (unsigned int i=0; i<ard_index.size(); i++) {
-	//iterate over all ARD parameters
-	ardindex = ard_index[i];
-
-	SymmetricMatrix PriorPrec;
-	PriorPrec = thetaPrior.GetPrecisions();
-	
-	PriorPrec(ardindex,ardindex) = 1e-12; //set prior to be initally non-informative
-	
-	thetaPrior.SetPrecisions(PriorPrec);
-	
-	thetaPrior.means(ardindex)=0;
-	
-	//set the Free energy contribution from ARD term
-	SymmetricMatrix PostCov = theta.GetCovariance();
-	double b = 2/(theta.means(ardindex)*theta.means(ardindex) + PostCov(ardindex,ardindex));
-	Fard += -1.5*(log(b) + digamma(0.5)) - 0.5 - gammaln(0.5) - 0.5*log(b); //taking c as 0.5 - which it will be!
-      }
-  }
-  return;
-}
-
-void CESTFwdModel::UpdateARD(
-				const MVNDist& theta,
-				MVNDist& thetaPrior, double& Fard) const
-{
-  Tracer_Plus tr("CESTFwdModel::UpdateARD");
-  
-  if (doard)
-    Fard=0;
-    {
-      int ardindex;
-      for (unsigned int i=0; i<ard_index.size(); i++) {
-	//iterate over all ARD parameters
-	ardindex = ard_index[i];
-
-  
-      SymmetricMatrix PriorCov;
-      SymmetricMatrix PostCov;
-      PriorCov = thetaPrior.GetCovariance();
-      PostCov = theta.GetCovariance();
-
-      PriorCov(ardindex,ardindex) = theta.means(ardindex)*theta.means(ardindex) + PostCov(ardindex,ardindex);
-
-      
-      thetaPrior.SetCovariance(PriorCov);
-
-      //Calculate the extra terms for the free energy
-      double b = 2/(theta.means(ardindex)*theta.means(ardindex) + PostCov(ardindex,ardindex));
-      Fard += -1.5*(log(b) + digamma(0.5)) - 0.5 - gammaln(0.5) - 0.5*log(b); //taking c as 0.5 - which it will be!
-    }
-  }
-
-  return;
-
-  }
 
 ReturnMatrix CESTFwdModel::expm(Matrix inmatrix) const
 {
