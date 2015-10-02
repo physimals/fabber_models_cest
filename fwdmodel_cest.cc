@@ -14,7 +14,7 @@
 #include "newimage/newimageall.h"
 #include "miscmaths/miscprob.h"
 using namespace NEWIMAGE;
-#include "easylog.h"
+#include "fabbercore/easylog.h"
 
 string CESTFwdModel::ModelVersion() const
 {
