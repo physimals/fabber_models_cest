@@ -6,10 +6,13 @@
 
 /*  CCOPYRIGHT */
 
-#include "fabbercore/fwdmodel.h"
-#include "fabbercore/inference.h"
+#include "fabber_core/fwdmodel.h"
+#include "fabber_core/inference.h"
+#include "utils/tracer_plus.h"
+
 #include <string>
 using namespace std;
+using Utilities::Tracer_Plus;
 
 class CESTFwdModel : public FwdModel {
 public:
@@ -17,12 +20,12 @@ public:
   
   // Virtual function overrides
   virtual void Initialize(ArgsType& args);
-  virtual void Evaluate(const ColumnVector& params, 
-			      ColumnVector& result) const;
+  virtual void Evaluate(const NEWMAT::ColumnVector& params, 
+			      NEWMAT::ColumnVector& result) const;
    virtual vector<string> GetUsage() const;
    virtual string ModelVersion() const;
                   
-   virtual void DumpParameters(const ColumnVector& vec,
+   virtual void DumpParameters(const NEWMAT::ColumnVector& vec,
                                 const string& indents = "") const;
                                 
    virtual void NameParams(vector<string>& names) const;     
@@ -38,18 +41,18 @@ public:
 
 protected: 
   //specific functions
-  void Mz_spectrum(ColumnVector& Mz, const ColumnVector& wvec, const ColumnVector& w1, const ColumnVector& t, const ColumnVector& M0, const Matrix& wi, const Matrix& kij, const Matrix& T12) const;
-  ReturnMatrix Mz_spectrum_lorentz(const ColumnVector& wvec, const ColumnVector& w1, const ColumnVector& t, const ColumnVector& M0, const Matrix& wi, const Matrix& kij, const Matrix& T12) const;
+  void Mz_spectrum(NEWMAT::ColumnVector& Mz, const NEWMAT::ColumnVector& wvec, const NEWMAT::ColumnVector& w1, const NEWMAT::ColumnVector& t, const NEWMAT::ColumnVector& M0, const  NEWMAT::Matrix& wi, const  NEWMAT::Matrix& kij, const  NEWMAT::Matrix& T12) const;
+   NEWMAT::ReturnMatrix Mz_spectrum_lorentz(const NEWMAT::ColumnVector& wvec, const NEWMAT::ColumnVector& w1, const NEWMAT::ColumnVector& t, const NEWMAT::ColumnVector& M0, const  NEWMAT::Matrix& wi, const  NEWMAT::Matrix& kij, const  NEWMAT::Matrix& T12) const;
 
-  void Mz_contribution_lorentz_simple(ColumnVector& Mzc, const ColumnVector& wvec, const double& I, const ColumnVector& wi, const double& R) const;
+  void Mz_contribution_lorentz_simple(NEWMAT::ColumnVector& Mzc, const NEWMAT::ColumnVector& wvec, const double& I, const NEWMAT::ColumnVector& wi, const double& R) const;
 
   //maths functions
-  void Ainverse(const Matrix A, RowVector& Ai) const;
-  ReturnMatrix expm(Matrix inmatrix) const;
-  ReturnMatrix expm_eig(Matrix inmatrix) const;
-  ReturnMatrix expm_pade(Matrix inmatrix) const;
-  ReturnMatrix PadeApproximant(Matrix inmatrix, int m) const;
-  ReturnMatrix PadeCoeffs(int m) const;
+  void Ainverse(const  NEWMAT::Matrix A,  NEWMAT::RowVector& Ai) const;
+   NEWMAT::ReturnMatrix expm( NEWMAT::Matrix inmatrix) const;
+   NEWMAT::ReturnMatrix expm_eig( NEWMAT::Matrix inmatrix) const;
+   NEWMAT::ReturnMatrix expm_pade( NEWMAT::Matrix inmatrix) const;
+   NEWMAT::ReturnMatrix PadeApproximant( NEWMAT::Matrix inmatrix, int m) const;
+   NEWMAT::ReturnMatrix PadeCoeffs(int m) const;
 
 // Constants
 
@@ -74,30 +77,30 @@ protected:
   int npool;
   float wlam;
   float B1set;
-  ColumnVector poolppm;
-  ColumnVector poolk;
-  Matrix T12master;
-  ColumnVector poolcon;
-  ColumnVector poolconprec;
-  //Matrix T12WMmaster;
-  //Matrix T12CSFmaster;
+  NEWMAT::ColumnVector poolppm;
+  NEWMAT::ColumnVector poolk;
+   NEWMAT::Matrix T12master;
+  NEWMAT::ColumnVector poolcon;
+  NEWMAT::ColumnVector poolconprec;
+  // NEWMAT::Matrix T12WMmaster;
+  // NEWMAT::Matrix T12CSFmaster;
 
   // MT pool
   //bool mtpool;
 
   // extra pools
   int nexpool;
-  ColumnVector expoolppm;
-  ColumnVector expoolR;
+  NEWMAT::ColumnVector expoolppm;
+  NEWMAT::ColumnVector expoolR;
 
   // Data specification
-  ColumnVector wvec;
-  ColumnVector w1vec;
-  ColumnVector tsatvec;
+  NEWMAT::ColumnVector wvec;
+  NEWMAT::ColumnVector w1vec;
+  NEWMAT::ColumnVector tsatvec;
 
   //pulse specificaiton
-  ColumnVector pmagvec;
-  ColumnVector ptvec;
+  NEWMAT::ColumnVector pmagvec;
+  NEWMAT::ColumnVector ptvec;
   int nseg;
 
   // processing flags

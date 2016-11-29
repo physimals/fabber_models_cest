@@ -14,7 +14,7 @@
 #include "newimage/newimageall.h"
 #include "miscmaths/miscprob.h"
 using namespace NEWIMAGE;
-#include "fabbercore/easylog.h"
+#include "fabber_core/easylog.h"
 
 FactoryRegistration<FwdModelFactory, CESTFwdModel> 
   CESTFwdModel::registration("cest");
