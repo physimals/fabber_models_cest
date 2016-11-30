@@ -1,6 +1,6 @@
 # Building the CEST models #
 
-The current version of the CEST models are designed to build with the latest version of Fabber. Although it should be possible to build them against FSL 5.0 you may need to edit the source slightly. So your first step should be to build fabber-core from Git.
+The current version of the CEST models are designed to build with the latest version of Fabber. Although it should be possible to build them against FSL 5.0 you may need to edit the source slightly. So your first step should be to build fabber-core from Git. Build instructions for fabber-core are in the Wiki on its Git page. You will make the process straightforward if you create a directory (e.g. 'fabber') and download the Git repositories for fabber-core and fabber-models-cest into this directory. Then the CEST model build should be able to find the Fabber libraries without you having to install them or tell the build scripts where they are.
 
 The CEST models use cmake as the build tool. CMake is designed for out-of-source builds, so you create a separate build directory and all the compiled files end up there. CMake is installed on many Linux distributions by default, or can easily be added. It is also readily available for OSX and Windows.
 
