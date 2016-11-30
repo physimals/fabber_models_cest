@@ -2,7 +2,10 @@
 
 The current version of the CEST model is designed to build with the latest version of Fabber. Although it should be possible to build them against FSL 5.0 you may need to edit the source slightly. So your first step should be to build fabber-core from Git. Build instructions for fabber-core are in the Wiki on its Git page. You will make the process straightforward if you create a directory (e.g. 'fabber') and download the Git repositories for fabber_core and fabber_models_cest into this directory. Then the CEST model build should be able to find the Fabber libraries without you having to install them or tell the build scripts where they are.
 
-The CEST model uses cmake as the build tool. CMake is designed for out-of-source builds, so you create a separate build directory and all the compiled files end up there. CMake is installed on many Linux distributions by default, or can easily be added. It is also readily available for OSX and Windows.
+The CEST model uses cmake as the build tool. CMake is designed for out-of-source builds, so you create a separate build directory and all the compiled files end up there. 
+CMake is installed on many Linux distributions by default, or can easily be added. It is also readily available for OSX and Windows.
+
+If you have an existing FSL source directory and want to build the CEST models from within this, [see below](#fslbuild)
 
 You need to ensure that `FSLDIR` is set to point to wherever the FSL dependencies are installed, following that the basic steps to make a build are:
 
@@ -74,3 +77,20 @@ or
     trivial
   
 Note that you still need to specify --model=cest on the command line to tell Fabber to use the CEST model.
+
+### <a name="fslbuild"></a>Building in an FSL environment
+
+If you have built `fabber_core` within an FSL source distribution which you may prefer to build the CEST model within the same system. You will need to 
+do the following:
+
+1. Move the fabber_models_cest directory into the FSL source tree `mv fabber_models_cest $FSLDIR/src/`
+2. `cd $FSLDIR/src/fabber_models_cest`
+3. make
+
+`fabber_cest` should now be set up to build, provided you have the following environment variables set up:
+
+    FSLDIR
+    FSLCONFDIR
+    FSLMACHTYPE
+
+Note that the FSL makefile does not attempt to build the shared library.
