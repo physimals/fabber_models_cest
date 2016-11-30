@@ -1,8 +1,8 @@
-# Building the CEST models #
+# Building the CEST model #
 
-The current version of the CEST models are designed to build with the latest version of Fabber. Although it should be possible to build them against FSL 5.0 you may need to edit the source slightly. So your first step should be to build fabber-core from Git. Build instructions for fabber-core are in the Wiki on its Git page. You will make the process straightforward if you create a directory (e.g. 'fabber') and download the Git repositories for fabber-core and fabber-models-cest into this directory. Then the CEST model build should be able to find the Fabber libraries without you having to install them or tell the build scripts where they are.
+The current version of the CEST model is designed to build with the latest version of Fabber. Although it should be possible to build them against FSL 5.0 you may need to edit the source slightly. So your first step should be to build fabber-core from Git. Build instructions for fabber-core are in the Wiki on its Git page. You will make the process straightforward if you create a directory (e.g. 'fabber') and download the Git repositories for fabber_core and fabber_models_cest into this directory. Then the CEST model build should be able to find the Fabber libraries without you having to install them or tell the build scripts where they are.
 
-The CEST models use cmake as the build tool. CMake is designed for out-of-source builds, so you create a separate build directory and all the compiled files end up there. CMake is installed on many Linux distributions by default, or can easily be added. It is also readily available for OSX and Windows.
+The CEST model uses cmake as the build tool. CMake is designed for out-of-source builds, so you create a separate build directory and all the compiled files end up there. CMake is installed on many Linux distributions by default, or can easily be added. It is also readily available for OSX and Windows.
 
 You need to ensure that `FSLDIR` is set to point to wherever the FSL dependencies are installed, following that the basic steps to make a build are:
 
@@ -47,7 +47,7 @@ Two objects are built:
 
 You may use whichever of these you prefer, however if you are intending to use the command line tool you will probably find the fabber_cest executable more convenient. The shared library is intended for when you want to embed the Fabber library in another application.
 
-You can verify that the CEST models are available whichever method you choose:
+You can verify that the CEST model is available whichever method you choose:
 
     fabber_cest --listmodels
 
