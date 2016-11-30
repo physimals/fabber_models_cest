@@ -2,12 +2,12 @@ include ${FSLCONFDIR}/default.mk
 
 PROJNAME = fabber_cest
 
-USRINCFLAGS = -I${INC_NEWMAT} -I${INC_PROB} -I${INC_BOOST}
-USRLDFLAGS = -L${LIB_NEWMAT} -L${LIB_PROB}
+USRINCFLAGS = -I${INC_NEWMAT} -I${INC_PROB} -I${INC_BOOST} -I..
+USRLDFLAGS = -L${LIB_NEWMAT} -L${LIB_PROB} -L../fabber_core
 
-LIBS = -lutils -lnewimage -lmiscmaths -lprob -lnewmat -lfslio -lniftiio -lznz -lz
+LIBS = -lutils -lnewimage -lmiscmaths -lprob -lnewmat -lfslio -lniftiio -lznz -lz -ldl
 
-XFILES = fabber
+XFILES = fabber_cest
 
 # Forward models
 OBJS =  fwdmodel_cest.o
@@ -20,14 +20,14 @@ OPTFLAGS = -ggdb
 # Build
 #
 
-all:	${XFILES} libfabbermodels_cest.a
+all:	${XFILES} libfabber_models_cest.a
 
 # models in a library
-libfabbermodels_cest.a : ${OBJS}
+libfabber_models_cest.a : ${OBJS}
 	${AR} -r $@ ${OBJS}
 
 # fabber built from the FSL fabbercore library including the models specifieid in this project
-fabber : fabber_client.o ${OBJS}
-	${CXX} ${CXXFLAGS} ${LDFLAGS} -o $@ $< ${OBJS} -lfabbercore ${LIBS}
+fabber_cest : fabber_client.o ${OBJS}
+	${CXX} ${CXXFLAGS} ${LDFLAGS} -o $@ $< ${OBJS} -lfabbercore -lfabberexec ${LIBS}
 
 # DO NOT DELETE

@@ -6,3 +6,5 @@ CVS
 depend.mk
 fabber
 mvntool
+fabber_cest
+build

@@ -21,8 +21,14 @@ FactoryRegistration<FwdModelFactory, CESTFwdModel>
 
 string CESTFwdModel::ModelVersion() const
 {
-  return "$Id: fwdmodel_cest.cc,v 1.8 2015/01/29 12:19:08 chappell Exp $";
-}
+   string version = "fwdmodel_cest.cc";
+#ifdef GIT_SHA1
+    version += string(" Revision ") + GIT_SHA1;
+#endif
+#ifdef GIT_DATE
+    version += string(" Last commit ") + GIT_DATE;
+#endif
+    return version;}
 
 void CESTFwdModel::HardcodedInitialDists(MVNDist& prior, 
     MVNDist& posterior) const

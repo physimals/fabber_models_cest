@@ -72,4 +72,28 @@ target_link_libraries(fabber_cest ${LIBS})
 
 include_directories(SYSTEM ${FABBER_INCLUDE_DIR} ${NEWMAT_INCLUDE_DIR} ${FSL_INCLUDE_DIR} ${FSL_EXT_INCLUDE_DIR} ${FSL_EXT_INCLUDE_DIR}/libprob ${BOOST_INCLUDE_DIR})
 
+# Extract GIT revision for versioning
+
+execute_process(COMMAND
+  git describe --match=NeVeRmAtCh --always --abbrev=40 --dirty
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  OUTPUT_VARIABLE GIT_SHA1
+  ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+execute_process(COMMAND
+  git log -1 --format=%ad --date=local
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  OUTPUT_VARIABLE GIT_DATE
+  ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+if (NOT GIT_SHA1)
+  set(GIT_SHA1 unknown)
+endif(NOT GIT_SHA1)
+
+if (NOT GIT_DATE)
+  set(GIT_DATE unknown)
+endif(NOT GIT_DATE)
+
+add_definitions(-DGIT_SHA1="${GIT_SHA1}" -DGIT_DATE="${GIT_DATE}")
+
 
