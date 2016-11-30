@@ -40,6 +40,14 @@ After running `make`, if all goes well, the build should conclude with the messa
     [100%] Linking CXX shared library libfabber_models_cest.so
     [100%] Built target fabber_models_cest
 
+### It failed with something about `recompile with -fPIC`
+
+In order to build the shared library, the FSL libraries have to contain 'Position-independent code'. If they don't you can't build the library and will need to use 
+the fabber_asl executable instead. The only way around this is to recompile the FSL libraries with the -fPIC flag but this may be a challenge. You're better off 
+just running make fabber_asl which will just build the executable.
+
+### Successful build?
+
 Two objects are built:
 
 1. An executable fabber_cest, which is a version of the Fabber executable with the CEST model built in
