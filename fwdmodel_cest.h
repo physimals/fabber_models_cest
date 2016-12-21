@@ -8,11 +8,9 @@
 
 #include "fabber_core/fwdmodel.h"
 #include "fabber_core/inference.h"
-#include "utils/tracer_plus.h"
 
 #include <string>
 using namespace std;
-using Utilities::Tracer_Plus;
 
 class CESTFwdModel : public FwdModel {
 public:
@@ -24,7 +22,9 @@ public:
 			      NEWMAT::ColumnVector& result) const;
    virtual vector<string> GetUsage() const;
    virtual string ModelVersion() const;
-                  
+   virtual void GetOptions(std::vector<OptionSpec> &opts) const;
+   virtual std::string GetDescription() const;
+               
    virtual void DumpParameters(const NEWMAT::ColumnVector& vec,
                                 const string& indents = "") const;
                                 

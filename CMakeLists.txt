@@ -36,8 +36,6 @@ find_library(NEWMAT_LIBRARY NAMES newmat libnewmat
              HINTS $ENV{FSLDIR}/extras/lib REQUIRED )
 find_library(MISCMATHS_LIBRARY NAMES miscmaths libmiscmaths
              HINTS $ENV{FSLDIR}/lib REQUIRED )
-find_library(UTILS_LIBRARY NAMES utils libutils
-             HINTS $ENV{FSLDIR}/lib REQUIRED )
 find_library(NEWIMAGE_LIBRARY NAMES newimage libnewimage
              HINTS $ENV{FSLDIR}/lib REQUIRED )
 find_library(FSLIO_LIBRARY NAMES fslio libfslio
@@ -51,7 +49,7 @@ find_library(Z_LIBRARY NAMES z libz zlib zlibd
 find_library(PROB_LIBRARY NAMES prob libprob
              HINTS $ENV{FSLDIR}/extras/lib REQUIRED )
 
-set(LIBS ${FABBER_LIBRARY} ${FABBER_EXEC_LIBRARY}  ${NEWIMAGE_LIBRARY} ${FSLIO_LIBRARY} ${NIFTIIO_LIBRARY} ${MISCMATHS_LIBRARY} ${UTILS_LIBRARY} ${ZNZ_LIBRARY} ${Z_LIBRARY} ${NEWMAT_LIBRARY} ${PROB_LIBRARY})
+set(LIBS ${FABBER_LIBRARY} ${FABBER_EXEC_LIBRARY}  ${NEWIMAGE_LIBRARY} ${FSLIO_LIBRARY} ${MISCMATHS_LIBRARY} ${NIFTIIO_LIBRARY} ${ZNZ_LIBRARY} ${Z_LIBRARY} ${NEWMAT_LIBRARY} ${PROB_LIBRARY})
 
 if (UNIX)
   set(LIBS ${LIBS} dl)
@@ -59,7 +57,6 @@ endif(UNIX)
 
 Message("-- Using Fabber libraries: ${FABBER_LIBRARY} ${FABBER_EXEC_LIBRARY}")
 Message("-- Using libznz: ${ZNZ_LIBRARY}")
-Message("-- Using libutils: ${UTILS_LIBRARY} ${UTILS_INCLUDE_DIR}")
 Message("-- Using miscmaths: ${MISCMATHS_LIBRARY}")
 Message("-- Using fslio: ${FSLIO_LIBRARY}")
 Message("-- Using newimage: ${NEWIMAGE_LIBRARY}")

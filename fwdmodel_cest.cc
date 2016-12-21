@@ -19,6 +19,31 @@ using namespace NEWIMAGE;
 FactoryRegistration<FwdModelFactory, CESTFwdModel> 
   CESTFwdModel::registration("cest");
 
+static OptionSpec OPTIONS[] =
+{
+	{ "dataspec", OPT_MATRIX, "ASCII matrix containing data specification", OPT_REQ, "" },
+	{ "pools", OPT_MATRIX, "ASCII matrix containing pool specification", OPT_REQ, "" },
+	{ "expools", OPT_MATRIX, "ASCII matrix containing extra pool specification", OPT_NONREQ, "" },
+	{ "ptrain", OPT_MATRIX, "ASCII matrix containing pulsed saturation specification", OPT_NONREQ, "" },
+	{ "t12prior", OPT_BOOL, "Include uncertainty in T1 and T2 values", OPT_NONREQ, "" },
+	{ "inferdrift", OPT_BOOL, "", OPT_NONREQ, "" },
+	{ "lorentz", OPT_BOOL, "Alternative to Matrix exponential solution to Bloch equations", OPT_NONREQ, "" },
+	{ "steadystate", OPT_BOOL, "Alternative to Matrix exponential solution to Bloch equations", OPT_NONREQ, "" },
+	{ "" }, };
+
+void CESTFwdModel::GetOptions(vector<OptionSpec> &opts) const
+{
+	for (int i = 0; OPTIONS[i].name != ""; i++)
+	{
+		opts.push_back(OPTIONS[i]);
+	}
+}
+
+std::string CESTFwdModel::GetDescription() const
+{
+	return "Model for Chemical Exchange Saturation transfer";
+}
+
 string CESTFwdModel::ModelVersion() const
 {
    string version = "fwdmodel_cest.cc";
@@ -33,7 +58,6 @@ string CESTFwdModel::ModelVersion() const
 void CESTFwdModel::HardcodedInitialDists(MVNDist& prior, 
     MVNDist& posterior) const
 {
-    Tracer_Plus tr("CESTFwdModel::HardcodedInitialDists");
     assert(prior.means.Nrows() == NumParams());
 
      SymmetricMatrix precisions = IdentityMatrix(NumParams()) * 1e-12;
@@ -212,8 +236,6 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist& prior,
 
 void CESTFwdModel::InitParams(MVNDist& posterior) const
 {
-  Tracer_Plus tr("CESTFwdModel::InitParams");
-
   //load the existing precisions as the basis for any update
   SymmetricMatrix precisions;
   precisions = posterior.GetPrecisions();
@@ -246,10 +268,6 @@ void CESTFwdModel::InitParams(MVNDist& posterior) const
 
 void CESTFwdModel::Evaluate(const ColumnVector& params, ColumnVector& result) const
 {
-  Tracer_Plus tr("CESTFwdModel::Evaluate");
-
-  //cout << params << endl;
-
     // ensure that values are reasonable
     // negative check
   ColumnVector paramcpy = params;
@@ -537,8 +555,6 @@ FwdModel* CESTFwdModel::NewInstance()
 
 void CESTFwdModel::Initialize(ArgsType& args)
 {
-  Tracer_Plus tr("CESTFwdModel:Initialize");
-
     string scanParams = args.ReadWithDefault("scan-params","cmdline");
 
     Matrix dataspec; //matrix containing spec for each datapoint
@@ -836,8 +852,6 @@ ReturnMatrix CESTFwdModel::expm(Matrix inmatrix) const
 ReturnMatrix CESTFwdModel::expm_eig(Matrix inmatrix) const
 {
   // Do matrix exponential using eigen decomposition of the matrix
-  Tracer_Plus tr("CESTFwdModel::expm_eig");
-
   SymmetricMatrix A;
   A << inmatrix; // a bit poor - the matrix coming in should be symmetric, but I haven't implemented this elsewhere in the code (yet!)
 
@@ -863,8 +877,7 @@ ReturnMatrix CESTFwdModel::expm_pade(Matrix inmatrix) const
 {
   // Do matrix exponential
   // Algorithm from Higham, SIAM J. Matrix Analysis App. 24(4) 2005, 1179-1193
-  Tracer_Plus tr("CESTFwdModel::expm");
-
+ 
   Matrix A = inmatrix;
   Matrix X(A.Nrows(),A.Ncols());
 
@@ -909,8 +922,6 @@ ReturnMatrix CESTFwdModel::expm_pade(Matrix inmatrix) const
 
 ReturnMatrix CESTFwdModel::PadeApproximant(Matrix inmatrix, int m) const
 {
-  Tracer_Plus tr("CESTFwdModel::PadeApproximant");
-
   //cout << "PadeApproximant" << endl;
   //cout << inmatrix << endl;
   assert(inmatrix.Nrows()==inmatrix.Ncols());
@@ -966,7 +977,6 @@ ReturnMatrix CESTFwdModel::PadeApproximant(Matrix inmatrix, int m) const
 
 ReturnMatrix CESTFwdModel::PadeCoeffs(int m) const {
 
-  Tracer_Plus tr("CESTFwdModel::PadeCoeffs");
   ColumnVector C;
   C.ReSize(m+1);
 
@@ -995,8 +1005,6 @@ switch (m)
 
 
 void CESTFwdModel::Mz_spectrum(ColumnVector& Mz, const ColumnVector& wvec, const ColumnVector& w1, const ColumnVector& t, const ColumnVector& M0, const Matrix& wi, const Matrix& kij, const Matrix& T12) const {
-
-  Tracer_Plus tr("CESTFwdModel::Mz_spectrum");
 
 
   int nfreq = wvec.Nrows(); // total number of samples collected
@@ -1218,8 +1226,6 @@ ReturnMatrix CESTFwdModel::Mz_spectrum_lorentz(const ColumnVector& wvec, const C
   //Analytic *steady state* solution to the *one pool* Bloch equations
   // NB t is ignored becasue it is ss
 
-  Tracer_Plus tr("CESTFwdModel::Mz_spectrum_lorentz");
-
   int nfreq = wvec.Nrows(); // total number of samples collected
 
   double R1 = 1./T12(1,1);
@@ -1238,8 +1244,7 @@ ReturnMatrix CESTFwdModel::Mz_spectrum_lorentz(const ColumnVector& wvec, const C
 void CESTFwdModel::Ainverse(const Matrix A, RowVector& Ai) const {
   // More efficicent matrix inversion using the block structure of the problem
   // Implicitly assumes no exchange between pools (aside from water)
-  Tracer_Plus tr("CESTFwdModel::Ainverse");
-
+ 
   int npool = A.Nrows()/3;
   int subsz = (npool-1)*3;
 
@@ -1285,8 +1290,6 @@ void CESTFwdModel::Mz_contribution_lorentz_simple(ColumnVector& Mzc, const Colum
   // Contirbution to the spectrum from a  single ('independent') pool
   // A simply parameterised Lorentzian (represeting a single pool solution to the Bloch equation)
   // Following Jones MRM 2012
-
-  Tracer_Plus tr("CESTFwdModel::Mz_contribution_lorentz");
 
   int nfreq = wvec.Nrows(); // total number of samples collected
 
