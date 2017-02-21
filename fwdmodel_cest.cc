@@ -21,7 +21,7 @@ FactoryRegistration<FwdModelFactory, CESTFwdModel>
 
 static OptionSpec OPTIONS[] =
 {
-	{ "dataspec", OPT_MATRIX, "ASCII matrix containing data specification", OPT_REQ, "" },
+	{ "spec", OPT_MATRIX, "ASCII matrix containing data specification", OPT_REQ, "" },
 	{ "pools", OPT_MATRIX, "ASCII matrix containing pool specification", OPT_REQ, "" },
 	{ "expools", OPT_MATRIX, "ASCII matrix containing extra pool specification", OPT_NONREQ, "" },
 	{ "ptrain", OPT_MATRIX, "ASCII matrix containing pulsed saturation specification", OPT_NONREQ, "" },
