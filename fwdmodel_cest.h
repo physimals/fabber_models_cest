@@ -127,10 +127,7 @@ protected:
 	int nseg;
 
 	//Excitation Pulse specification
-	NEWMAT::ColumnVector m_EXmagvec;
-	NEWMAT::ColumnVector m_EXtvec;
 	NEWMAT::ColumnVector m_EXmagMax;
-	int m_nEXseg;
 
 	//Readout specifications
 	NEWMAT::ColumnVector m_TR;

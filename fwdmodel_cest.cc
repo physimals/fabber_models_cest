@@ -645,7 +645,6 @@ void CESTFwdModel::Initialize(ArgsType& args)
 	string expoolmatfile;
 	string pulsematfile;
 	string Readmatfile;
-	string EXmatfile;
 
 	t12soft = false; //pvcorr=false;
 
@@ -662,9 +661,6 @@ void CESTFwdModel::Initialize(ArgsType& args)
 
 		//read pulsed saturation specification
 		pulsematfile = args.ReadWithDefault("ptrain", "none");
-
-		//read Excitation Pulse specification
-		EXmatfile = args.GetStringDefault("EXtrain", "none");
 
 		//read readout specification
 		Readmatfile = args.ReadWithDefault("readspec", "none");
@@ -837,30 +833,16 @@ void CESTFwdModel::Initialize(ArgsType& args)
 		// Load Readout Parameters
 		Matrix Readmat;
 		Readmat = read_ascii_matrix(Readmatfile);
-		m_EXmagMax = Readmat.Column(1) * 42.58e6 * 2 * M_PI;
+		m_EXmagMax = Readmat.Column(1);
 		m_TR = Readmat.Column(2);
 		m_SS = true;
 
 		LOG << "\nRunning Steady State CEST Model Based upon Listerud, MRM: 37 (1997)\n" << endl;
 
-		Matrix EXmat;
-		EXmat = read_ascii_matrix(EXmatfile);
-		m_EXmagvec = EXmat.Column(1); //vector of normalized (to 1) magnitude values for each segment
-		// vector of time durations for each segment
-		// We are loading a vector of times for the end of each segment + zero
-		ColumnVector ettemp = EXmat.Column(2);
-		m_EXtvec = ettemp.Rows(2,ettemp.Nrows()) - ettemp.Rows(1,ettemp.Nrows()-1);
-
-		m_nEXseg = EXmat.Nrows();
-
-		LOG << "Excitation Pulse length (s): \n" << endl << ettemp.Row(m_nEXseg) << endl;
 		LOG << "TR (s): \n" << m_TR.t() << endl;
 
-		LOG << "Pulse shape:" << endl << "Number of segments: " << m_nEXseg << endl;
-		LOG << "Excitation B1 values (uT):" << endl << Readmat.Column(1).t()*1e6 << endl
-				<< "          (rad/s):" << endl << m_EXmagMax.t() << endl;
-		LOG << " Magnitudes (Normalized to 1): \n" << m_EXmagvec.t() << endl;
-		LOG << " Durations (s): \n" << m_EXtvec.t() << endl;
+		LOG << "Excitation B1 values (rad):" << endl << Readmat.Column(1).t() << endl
+				<< "          (Degrees):" << endl << m_EXmagMax.t()* 180 / M_PI << endl;
 
 	}
 
@@ -1609,7 +1591,6 @@ void CESTFwdModel::Mz_spectrum_SS(
 	// Find Readout Matrix
 
 	double Tr = m_TR(1);
-	Tr-= m_EXtvec.Sum();
 	Tr -= ptvec.Rows(1,ptvec.Nrows()-1).Sum()*t(1);
 	Tr -= ptvec(ptvec.Nrows())*(t(1)-1);
 
@@ -1638,46 +1619,16 @@ void CESTFwdModel::Mz_spectrum_SS(
 	Es = expm(A*3e-3);
 
 	// Create Excitation Matrix
-
-	double ds0 = m_EXtvec.Sum()/m_EXtvec.Nrows();
-	Matrix Eps (mpool*3, 1);
-	Matrix Ept (mpool * 3, mpool * 3);
 	IdentityMatrix Eye(mpool*3);
 
-	for (int ii (1); ii <= m_EXmagvec.Nrows(); ++ii)
+	DiagonalMatrix C (mpool*3);
+	C = 0.0;
+
+	for (int i = 0; i < mpool; i++)
 	{
-		Matrix W0 (mpool*3, mpool *3);
-		W0 = 0.0;
-		for (int kk (1); kk <= mpool; ++kk)
-		{
-			Matrix W0s (3, 3);
-			W0s = 0.0;
-			W0s(1,2) = -wi(kk,1);
-			W0s(2,1) = wi(kk,1);
-			W0s(2,3) = -m_EXmagvec(ii)*w1EX(1);
-			W0s(3,2) = m_EXmagvec(ii)*w1EX(1);
-			st = (kk - 1) * 3;
-			W0.SubMatrix(st + 1, st + 3, st + 1, st + 3) = W0s;
-		}
-
-		Matrix Ep (mpool * 3, mpool * 3);
-
-		Ep = expm((A+W0)*ds0);
-
-		if (ii == 1)
-		{
-			Ept = Ep;
-			Matrix RlW0 (mpool*3,mpool*3);
-			RlW0 = A+W0;
-			Eps = (Eye-Ep)*RlW0.i();
-		}
-		else
-		{
-			Ept = Ep*Ept;
-			Matrix RlW0 (mpool*3,mpool*3);
-			RlW0 = A+W0;
-			Eps = Ep*Eps+(Eye-Ep)*RlW0.i();
-		}
+		C(3*i+1) = sin(w1EX(1));
+		C(3*i+2) = sin(w1EX(1));
+		C(3*i+3) = cos(w1EX(1));
 	}
 
 	// Create M0i Vector
@@ -1704,11 +1655,11 @@ void CESTFwdModel::Mz_spectrum_SS(
 		{
 			// no saturation image - the z water magnetization is just a normal FLASH sequence
 			Matrix Er0 (mpool*3, mpool *3);
-		    Er0 = expm(A*(m_TR(1)-m_EXtvec.Sum()));
+		    Er0 = expm(A*m_TR(1));
 		    ColumnVector Mz0 (mpool * 3);
 		    Matrix Er0Temp (mpool*3, mpool*3);
-		    Er0Temp = (Eye-Spoil*Er0*Ept);
-		    Mz0 = Er0Temp.i()*((Spoil*Er0*Eps*A+Eye-Er0)*M0i);
+		    Er0Temp = (Eye-Spoil*C*Er0);
+		    Mz0 = Er0Temp.i()*((Eye-Er0)*M0i);
 		    M(3, k) = Mz0(3);
 		}
 		else
@@ -1724,10 +1675,10 @@ void CESTFwdModel::Mz_spectrum_SS(
 				{
 					Matrix Ws (3, 3);
 					Ws = 0.0;
-					Ws(1,2) = -(wi(nn,k) - wvec(k));
-					Ws(2,1) = -Ws(1,2);
-					Ws(2,3) = -w1(k)*pmagvec(jj);
-					Ws(3,2) = -Ws(2,3);
+					Ws(2,1) = (wi(nn,k) - wvec(k));
+					Ws(1,2) = -Ws(2,1);
+					Ws(3,2) = w1(k)*pmagvec(jj);
+					Ws(2,3) = -Ws(3,2);
 					st = (nn - 1) * 3;
 					W.SubMatrix(st + 1, st + 3, st + 1, st + 3) = Ws;
 				}
@@ -1771,9 +1722,9 @@ void CESTFwdModel::Mz_spectrum_SS(
 
 
 			Matrix Mztemp (Emt);
-			Mztemp = Eye - Es*Emdc*Emt*Spoil*Er*Ept*Spoil;
+			Mztemp = Eye - Es*Emdc*Emt*Spoil*Er*C*Spoil;
 
-			M.Column(k) = Mztemp.i() * (Es*Emdc*Emt*Spoil*Er*Eps*A+Es*Emdc*Emt*Spoil*(Eye-Er)+Es*Emb*Emt*(Eye-Edc)
+			M.Column(k) = Mztemp.i() * (Es*Emdc*Emt*Spoil*(Eye-Er)+Es*Emb*Emt*(Eye-Edc)
 					+Eye-Es+Es*Emm*Ems*A)*M0i;
 
 		}
@@ -1781,6 +1732,7 @@ void CESTFwdModel::Mz_spectrum_SS(
 
 	ColumnVector Mtemp = (M.Row(3)).AsColumn();
 	Mz = (Mtemp/Mtemp.Maximum())*M0(1);
+
 
 }
 
