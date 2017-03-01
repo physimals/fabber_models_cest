@@ -580,7 +580,17 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 	}
 	else
 	{
-		Mz_spectrum(result, wvec, w1, tsatvec, M0, wimat, kij, T12);
+		// Call to Steady State CEST Model
+		if (m_SS)
+		{
+			// Only need to fix w1EX if using SS CEST
+			ColumnVector w1EX = m_EXmagMax * (1+B1off);
+			Mz_spectrum_SS(result, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
+		}
+		else
+		{
+			Mz_spectrum(result, wvec, w1, tsatvec, M0, wimat, kij, T12);
+		}
 	}
 
 	// extra pools
@@ -634,6 +644,8 @@ void CESTFwdModel::Initialize(ArgsType& args)
 
 	string expoolmatfile;
 	string pulsematfile;
+	string Readmatfile;
+	string EXmatfile;
 
 	t12soft = false; //pvcorr=false;
 
@@ -650,6 +662,12 @@ void CESTFwdModel::Initialize(ArgsType& args)
 
 		//read pulsed saturation specification
 		pulsematfile = args.ReadWithDefault("ptrain", "none");
+
+		//read Excitation Pulse specification
+		EXmatfile = args.GetStringDefault("EXtrain", "none");
+
+		//read readout specification
+		Readmatfile = args.ReadWithDefault("readspec", "none");
 
 		//basic  = args.ReadBool("basic");
 		//      pvcorr = args.ReadBool("pvcorr");
@@ -671,15 +689,15 @@ void CESTFwdModel::Initialize(ArgsType& args)
 	if (poolmat.Ncols() < 4 || poolmat.Ncols() > 6)
 	{
 		throw invalid_argument(
-				"Incorrect number of columns in pool spefication file");
+				"Incorrect number of columns in pool specification file");
 	}
 	// water centre
 	float wdefault = 42.58e6 * 3 * 2 * M_PI; //the default centre freq. (3T)
 	if (poolmat(1, 1) > 0)
-		wlam = -poolmat(1, 1) * 2 * M_PI; // Should be negative to reflect difference between ppm and Hz
+		wlam = -poolmat(1, 1) * 2 * M_PI; // Should be negative to reflect conversion between ppm and Hz
 	else
 		wlam = -wdefault;
-	// ppm ofsets
+	// ppm offsets
 	poolppm = poolmat.SubMatrix(2, npool, 1, 1);
 	// exchange rate
 	poolk = log(poolmat.SubMatrix(2, npool, 2, 2)); //NOTE the log_e transformation
@@ -688,7 +706,7 @@ void CESTFwdModel::Initialize(ArgsType& args)
 
 	if (poolmat.Ncols() > 4)
 	{
-		// pool ratios (concetrations) - these are used for initialisaiton, but may also be used as prior means if precisions are provided
+		// pool ratios (concentrations) - these are used for initialisaiton, but may also be used as prior means if precisions are provided
 		poolcon = poolmat.SubMatrix(2, npool, 5, 5); //ignore water pool
 	}
 	else
@@ -806,6 +824,46 @@ void CESTFwdModel::Initialize(ArgsType& args)
 		LOG << " Durations (s): " << ptvec.t() << endl;
 
 	}
+
+	//Steady State Modeling
+	// For Modeling the steady state Signal according to Listerud, Magn Reson Med 1997; 37: 693–705.
+	if (Readmatfile == "none")
+	{
+		m_SS = false;
+		LOG << "Running Original Fabber CEST Method" << endl;
+	}
+	else
+	{
+		// Load Readout Parameters
+		Matrix Readmat;
+		Readmat = read_ascii_matrix(Readmatfile);
+		m_EXmagMax = Readmat.Column(1) * 42.58e6 * 2 * M_PI;
+		m_TR = Readmat.Column(2);
+		m_SS = true;
+
+		LOG << "\nRunning Steady State CEST Model Based upon Listerud, MRM: 37 (1997)\n" << endl;
+
+		Matrix EXmat;
+		EXmat = read_ascii_matrix(EXmatfile);
+		m_EXmagvec = EXmat.Column(1); //vector of normalized (to 1) magnitude values for each segment
+		// vector of time durations for each segment
+		// We are loading a vector of times for the end of each segment + zero
+		ColumnVector ettemp = EXmat.Column(2);
+		m_EXtvec = ettemp.Rows(2,ettemp.Nrows()) - ettemp.Rows(1,ettemp.Nrows()-1);
+
+		m_nEXseg = EXmat.Nrows();
+
+		LOG << "Excitation Pulse length (s): \n" << endl << ettemp.Row(m_nEXseg) << endl;
+		LOG << "TR (s): \n" << m_TR.t() << endl;
+
+		LOG << "Pulse shape:" << endl << "Number of segments: " << m_nEXseg << endl;
+		LOG << "Excitation B1 values (uT):" << endl << Readmat.Column(1).t()*1e6 << endl
+				<< "          (rad/s):" << endl << m_EXmagMax.t() << endl;
+		LOG << " Magnitudes (Normalized to 1): \n" << m_EXmagvec.t() << endl;
+		LOG << " Durations (s): \n" << m_EXtvec.t() << endl;
+
+	}
+
 
 	/* OLD
 	 //deal with water centre frequency *in radians!*
@@ -1465,4 +1523,274 @@ void CESTFwdModel::Mz_contribution_lorentz_simple(ColumnVector& Mzc,
 		Mzc(k) = I * ((R * R) / (4 * delw * delw + R * R));
 	}
 
+}
+
+
+// Models the Bloch-McConnell equations based on Listerud, Magn Reson Med 1997; 37: 693–705.
+void CESTFwdModel::Mz_spectrum_SS(
+		ColumnVector& Mz,			// Vector: Magnetization
+		const ColumnVector& wvec, 	// Vector: Saturation Pulse Offset (radians/s = ppm * 42.58*B0*2*pi)
+		const ColumnVector& w1,   	// Vector: B1-corrected Saturation Pulse (radians = uT*42.58*2*pi)
+		const ColumnVector& t,    	// Vector: Number Pulses
+		const ColumnVector& M0,		// Vector: Pool Sizes
+		const Matrix& wi,			// Matrix: Pool offsets (radians/s = ppm * 42.58*B0*2*pi)
+		const Matrix& kij,			// Matrix: exchange rates for each pool (see below for in depth description)
+		const Matrix& T12,			// Matrix: T1's (Row 1) and T2's (Row 2)
+		const ColumnVector& w1EX     // Vector: B1-corrected Excitation Flip Angle
+) const
+{
+
+	/*********************************************************************
+	 * Description of Exchange Rate Matrix
+	 *********************************************************************
+	 3 Pool for example (Water - f, MT - m, Solute - s)
+	 	  [  0		kfm		kfs ]
+	 kij =[  kmf     0		0	]
+	  	  [	 ksf	 0		0	]
+
+
+	 *********************************************************************/
+
+	// total number of samples collected
+	int nfreq = wvec.Nrows();
+
+	// Number of Pools to be solved
+	int mpool = M0.Nrows();
+
+
+	Mz.ReSize(nfreq);
+	Mz = 0.0;
+
+	/**********************************************************************
+	 *					Assemble model matrices
+	 **********************************************************************/
+
+	// Find Diagonals of Relaxation Matrix
+	ColumnVector k1i(mpool);
+	ColumnVector k2i(mpool);
+	for (int i = 1; i <= mpool; i++)
+	{
+		k1i(i) = 1 / T12(1, i) + (kij.Row(i)).Sum();
+		k2i(i) = 1 / T12(2, i) + (kij.Row(i)).Sum();
+	}
+
+
+	// Populate Diagonals of Relaxation Matrix
+	Matrix A(mpool * 3, mpool * 3);
+	A = 0.0;
+	int st = 0;
+	for (int i = 1; i <= mpool; i++)
+	{
+		Matrix D(3, 3);
+		D = 0.0;
+		D(1, 1) = -k2i(i);
+		D(2, 2) = -k2i(i);
+		D(3, 3) = -k1i(i);
+		st = (i - 1) * 3;
+		A.SubMatrix(st + 1, st + 3, st + 1, st + 3) = D;
+	}
+
+	// Populate Exchange Parameters of Relaxation Matrix
+	int st2 = 0;
+	IdentityMatrix I(3);
+	for (int i = 1; i <= mpool; i++)
+	{
+		for (int j = 1; j <= mpool; j++)
+		{
+			if (i != j)
+			{
+				st = (i - 1) * 3;
+				st2 = (j - 1) * 3;
+				A.SubMatrix(st + 1, st + 3, st2 + 1, st2 + 3) = I * kij(j, i); //NB 'reversal' of indices is correct here
+			}
+		}
+	}
+
+	// Find Readout Matrix
+
+	double Tr = m_TR(1);
+	Tr-= m_EXtvec.Sum();
+	Tr -= ptvec.Rows(1,ptvec.Nrows()-1).Sum()*t(1);
+	Tr -= ptvec(ptvec.Nrows())*(t(1)-1);
+
+	Matrix Er = expm(A*Tr);
+
+	// Find CEST Saturation Train Pause (for Duty Cycle < 1.0) Matrix
+	float Tdc = ptvec(ptvec.Nrows());
+	Matrix Edc = expm(A*Tdc);
+
+	// Create Spoiling Matrix Using Square matrix with Transverse elements = 0
+
+	Matrix Spoil (mpool * 3, mpool * 3);
+	Spoil = 0.0;
+	for (int i = 1; i<= mpool; ++i)
+	{
+		st = i*3;
+		Spoil(st,st) = 1.0;
+	}
+
+	// Create End of Saturation Pulse Train Spoiling Delay Matrix with arbitrary 3 ms time
+	/* 	NB: This is also the point in time where the magnetization vector, Mz, is solved for.
+		Right after this rest, the magnetization is excited into the XY plane.
+	*/
+
+	Matrix Es (mpool*3,mpool*3);
+	Es = expm(A*3e-3);
+
+	// Create Excitation Matrix
+
+	double ds0 = m_EXtvec.Sum()/m_EXtvec.Nrows();
+	Matrix Eps (mpool*3, 1);
+	Matrix Ept (mpool * 3, mpool * 3);
+	IdentityMatrix Eye(mpool*3);
+
+	for (int ii (1); ii <= m_EXmagvec.Nrows(); ++ii)
+	{
+		Matrix W0 (mpool*3, mpool *3);
+		W0 = 0.0;
+		for (int kk (1); kk <= mpool; ++kk)
+		{
+			Matrix W0s (3, 3);
+			W0s = 0.0;
+			W0s(1,2) = -wi(kk,1);
+			W0s(2,1) = wi(kk,1);
+			W0s(2,3) = -m_EXmagvec(ii)*w1EX(1);
+			W0s(3,2) = m_EXmagvec(ii)*w1EX(1);
+			st = (kk - 1) * 3;
+			W0.SubMatrix(st + 1, st + 3, st + 1, st + 3) = W0s;
+		}
+
+		Matrix Ep (mpool * 3, mpool * 3);
+
+		Ep = expm((A+W0)*ds0);
+
+		if (ii == 1)
+		{
+			Ept = Ep;
+			Matrix RlW0 (mpool*3,mpool*3);
+			RlW0 = A+W0;
+			Eps = (Eye-Ep)*RlW0.i();
+		}
+		else
+		{
+			Ept = Ep*Ept;
+			Matrix RlW0 (mpool*3,mpool*3);
+			RlW0 = A+W0;
+			Eps = Ep*Eps+(Eye-Ep)*RlW0.i();
+		}
+	}
+
+	// Create M0i Vector
+
+	ColumnVector M0i(mpool * 3);
+	M0i = 0.0;
+
+	for (int i = 1; i <= mpool; i++)
+	{
+		M0i(i * 3) = M0(i);
+	}
+
+	Matrix M(mpool * 3, nfreq);
+	M = 0.0;
+
+
+	/**********************************************************************
+	 *					Solve for Mz
+	 **********************************************************************/
+
+	for (int k = 1; k <= nfreq; k++)
+	{
+		if (w1(k) == 0.0)
+		{
+			// no saturation image - the z water magnetization is just a normal FLASH sequence
+			Matrix Er0 (mpool*3, mpool *3);
+		    Er0 = expm(A*(m_TR(1)-m_EXtvec.Sum()));
+		    ColumnVector Mz0 (mpool * 3);
+		    Matrix Er0Temp (mpool*3, mpool*3);
+		    Er0Temp = (Eye-Spoil*Er0*Ept);
+		    Mz0 = Er0Temp.i()*((Spoil*Er0*Eps*A+Eye-Er0)*M0i);
+		    M(3, k) = Mz0(3);
+		}
+		else
+		{
+			Matrix Ems (mpool * 3, mpool * 3);
+			Matrix Emt (mpool * 3, mpool * 3);
+
+			for (int jj = 1; jj <= nseg-1; ++jj)
+			{
+				Matrix W (mpool * 3, mpool * 3);
+				W = 0.0;
+				for (int nn = 1; nn <= mpool; ++nn)
+				{
+					Matrix Ws (3, 3);
+					Ws = 0.0;
+					Ws(1,2) = -(wi(nn,k) - wvec(k));
+					Ws(2,1) = -Ws(1,2);
+					Ws(2,3) = -w1(k)*pmagvec(jj);
+					Ws(3,2) = -Ws(2,3);
+					st = (nn - 1) * 3;
+					W.SubMatrix(st + 1, st + 3, st + 1, st + 3) = Ws;
+				}
+
+				Matrix Em (mpool * 3, mpool * 3);
+
+				Em = expm((A+W)*ptvec(jj));
+
+				if (jj == 1)
+				{
+					Emt = Em;
+					Matrix RlW0 (mpool*3,mpool*3);
+					RlW0 = A+W;
+					Ems = (Eye-Em)*RlW0.i();
+				}
+				else
+				{
+					Emt = Em*Emt;
+					Matrix RlW0 (mpool*3,mpool*3);
+					RlW0 = A+W;
+					Ems = Em*Ems+(Eye-Em)*RlW0.i();
+				}
+
+			}
+
+			// Build the Pulse Train
+			Matrix Emdc (Emt);
+			Emdc = mpower(Emt*Edc,t(k)-1);
+
+			Matrix Emm (Emt);
+			Emm = Eye;
+			Matrix Emb (Emt);
+			Emb = Eye;
+
+			for (int jj=1; jj < t(k); ++jj)
+			{
+				if (jj == t(k)-1)
+					Emb = Emm;
+				Emm += mpower(Emt*Edc,jj);
+			}
+
+
+			Matrix Mztemp (Emt);
+			Mztemp = Eye - Es*Emdc*Emt*Spoil*Er*Ept*Spoil;
+
+			M.Column(k) = Mztemp.i() * (Es*Emdc*Emt*Spoil*Er*Eps*A+Es*Emdc*Emt*Spoil*(Eye-Er)+Es*Emb*Emt*(Eye-Edc)
+					+Eye-Es+Es*Emm*Ems*A)*M0i;
+
+		}
+	}
+
+	ColumnVector Mtemp = (M.Row(3)).AsColumn();
+	Mz = (Mtemp/Mtemp.Maximum())*M0(1);
+
+}
+
+// Function that will raise a matrix to a power Power
+inline ReturnMatrix CESTFwdModel::mpower(const Matrix& Mat_Base, int Power) const
+{
+	Matrix MExp;
+	MExp = Mat_Base;
+	for (int ii{1}; ii< Power; ++ii)
+		MExp *= Mat_Base;
+
+	return MExp;
 }

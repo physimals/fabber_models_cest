@@ -67,6 +67,9 @@ protected:
 			const NEWMAT::Matrix& wi, const NEWMAT::Matrix& kij,
 			const NEWMAT::Matrix& T12, const NEWMAT::ColumnVector& w1EX) const;
 
+	// Function to raise a matrix to a power Power;
+	inline NEWMAT::ReturnMatrix mpower(const NEWMAT::Matrix& Mat_Base, int Power) const;
+
 	//maths functions
 	void Ainverse(const NEWMAT::Matrix A, NEWMAT::RowVector& Ai) const;
 	NEWMAT::ReturnMatrix expm(NEWMAT::Matrix inmatrix) const;
