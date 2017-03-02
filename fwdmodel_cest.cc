@@ -1731,7 +1731,7 @@ void CESTFwdModel::Mz_spectrum_SS(
 	}
 
 	ColumnVector Mtemp = (M.Row(3)).AsColumn();
-	Mz = (Mtemp/Mtemp.Maximum())*M0(1);
+	Mz = abs(Mtemp/Mtemp.Maximum())*M0(1);
 
 
 }
