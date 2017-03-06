@@ -700,6 +700,9 @@ void CESTFwdModel::Initialize(ArgsType &args)
         // (prior) R values
         expoolR = expoolmat.SubMatrix(1, nexpool, 2, 2);
     }
+    else  {
+        nexpool = 0;
+    }
 
     /* OLD
     //initialization
