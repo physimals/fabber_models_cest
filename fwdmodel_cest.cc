@@ -20,14 +20,14 @@ FactoryRegistration<FwdModelFactory, CESTFwdModel>
     CESTFwdModel::registration("cest");
 
 static OptionSpec OPTIONS[] = {
-    { "spec", OPT_MATRIX, "ASCII matrix containing data specification", OPT_REQ, "" },
-    { "pools", OPT_MATRIX, "ASCII matrix containing pool specification", OPT_REQ, "" },
-    { "expools", OPT_MATRIX, "ASCII matrix containing extra pool specification", OPT_NONREQ, "" },
-    { "ptrain", OPT_MATRIX, "ASCII matrix containing pulsed saturation specification", OPT_NONREQ, "" },
+    { "spec", OPT_MATRIX, "Data specification", OPT_REQ, "" },
+    { "pools", OPT_MATRIX, "Pool specification", OPT_REQ, "" },
+    { "expools", OPT_MATRIX, "Extra pool specification", OPT_NONREQ, "" },
+    { "ptrain", OPT_MATRIX, "Pulse specification", OPT_REQ, "" },
     { "t12prior", OPT_BOOL, "Include uncertainty in T1 and T2 values", OPT_NONREQ, "" },
-    { "inferdrift", OPT_BOOL, "", OPT_NONREQ, "" },
-    { "lorentz", OPT_BOOL, "Alternative to Matrix exponential solution to Bloch equations", OPT_NONREQ, "" },
-    { "steadystate", OPT_BOOL, "Alternative to Matrix exponential solution to Bloch equations", OPT_NONREQ, "" },
+    { "inferdrift", OPT_BOOL, "Infer drift parameter", OPT_NONREQ, "" },
+    { "lorentz", OPT_BOOL, "Alternative solution to Bloch equations", OPT_NONREQ, "" },
+    { "steadystate", OPT_BOOL, "Steady state", OPT_NONREQ, "" },
     { "" },
 };
 
