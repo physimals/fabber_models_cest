@@ -85,7 +85,7 @@ protected:
 	NEWMAT::ReturnMatrix expm(NEWMAT::Matrix inmatrix) const;
 	NEWMAT::ReturnMatrix expm_eig(NEWMAT::Matrix inmatrix) const;
 	NEWMAT::ReturnMatrix expm_pade(NEWMAT::Matrix inmatrix) const;
-	NEWMAT::ReturnMatrix PadeApproximant(NEWMAT::Matrix inmatrix, int m) const;
+	NEWMAT::ReturnMatrix PadeApproximant(NEWMAT::Matrix inmatrix, int m, int& s) const;
 	NEWMAT::ReturnMatrix PadeCoeffs(int m) const;
 
 // Constants

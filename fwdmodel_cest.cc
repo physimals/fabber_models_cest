@@ -10,6 +10,7 @@
 
 #include <iostream>
 #include <newmatio.h>
+#include <stdio.h>
 #include <stdexcept>
 #include "newimage/newimageall.h"
 #include "miscmaths/miscprob.h"
@@ -1030,7 +1031,10 @@ ReturnMatrix CESTFwdModel::expm_eig(Matrix inmatrix) const
 ReturnMatrix CESTFwdModel::expm_pade(Matrix inmatrix) const
 {
 	// Do matrix exponential
-	// Algorithm from Higham, SIAM J. Matrix Analysis App. 26(4) 2005, 1179-1193
+	// Algorithm from:
+	// Higham, SIAM J. Matrix Analysis App. 26(4) 2005, 1179-1193
+	// and
+	// Al-Mohy and Higham, SIAM J. Matrix Anal. Appl. 31(3), (2009), 970-989
 
 	Matrix A = inmatrix;
 	Matrix X(A.Nrows(), A.Ncols());
@@ -1047,6 +1051,7 @@ ReturnMatrix CESTFwdModel::expm_pade(Matrix inmatrix) const
 	{ 1.495585217958292e-002, 2.539398330063230e-001, 9.504178996162932e-001,
 			2.097847961257068e+000, 5.371920351148152e+000 };
 	int i = 0;
+	int s = 0;
 
 	while (metflag < 1)
 	{
@@ -1055,7 +1060,7 @@ ReturnMatrix CESTFwdModel::expm_pade(Matrix inmatrix) const
 			//cout << "Try m = " << mvals[i] << endl;
 			if (A.Norm1() <= thetam[i])
 			{
-				X = PadeApproximant(A, mvals[i]);
+				X = PadeApproximant(A, mvals[i], s);
 				metflag = 1;
 			}
 		}
@@ -1063,11 +1068,7 @@ ReturnMatrix CESTFwdModel::expm_pade(Matrix inmatrix) const
 		{
 			// Using Pade Approximant degree 13 and scaling and squaring
 			//cout << "Doing m = 13" << endl;
-			int s = ceil(log2(A.Norm1() / thetam[4]));
-			cout << s << endl;
-			float half = 0.5;
-			A *= MISCMATHS::pow(half, s);
-			X = PadeApproximant(A, 13);
+			X = PadeApproximant(A, 13, s);
 			for (int i = 1; i <= s; i++)
 			{
 				X *= X;
@@ -1079,7 +1080,7 @@ ReturnMatrix CESTFwdModel::expm_pade(Matrix inmatrix) const
 	return X;
 }
 
-ReturnMatrix CESTFwdModel::PadeApproximant(Matrix inmatrix, int m) const
+ReturnMatrix CESTFwdModel::PadeApproximant(Matrix inmatrix, int m, int& s) const
 {
 	//cout << "PadeApproximant" << endl;
 	//cout << inmatrix << endl;
@@ -1093,7 +1094,6 @@ ReturnMatrix CESTFwdModel::PadeApproximant(Matrix inmatrix, int m) const
 	vector<Matrix> Apowers;
 
 	//cout << coeff << endl;
-
 	switch (m)
 	{
 	case 3:
@@ -1124,14 +1124,49 @@ ReturnMatrix CESTFwdModel::PadeApproximant(Matrix inmatrix, int m) const
 		//cout << X<< endl;
 		break;
 	case 13:
-		//cout << "case 13" << endl;
+//		cout << "case 13" << endl;
+		float thetam = 5.371920351148152e+000;
+
+		float half = 0.5;
+		Matrix A = inmatrix;
+
 		Matrix A2(n, n);
 		Matrix A4(n, n);
 		Matrix A6(n, n);
-		A2 = inmatrix * inmatrix;
+		Matrix A8(n, n);
+		Matrix A10(n, n);
+		A2 = A * A;
 		A4 = A2 * A2;
 		A6 = A2 * A4;
-		U = inmatrix
+		A8 = A4 * A4;
+		A10 = A4 * A6;
+		double d4 = std::pow(A4.Norm1(),1.0/4);
+		double d6 = std::pow(A6.Norm1(),1.0/6);
+		double d8 = std::pow(A8.Norm1(),1.0/8);
+		double d10 = std::pow(A10.Norm1(),1.0/10);
+		double eta1 = std::max(d4, d6);
+		double eta3 = std::max(d6, d8);
+		double eta4 = std::max(d8, d10);
+		double eta5 = std::min(eta3, eta4);
+		s = std::max(ceil(log2(eta5/thetam)),0.0);
+
+		Matrix sT = std::pow(1.0/113250775606021113483283660800000000.0,1.0/(2*m+1))*abs(A*MISCMATHS::pow(half, s));
+		sT = mpower(sT,2*m+1);
+		double alpha = sT.Norm1()/A.Norm1();
+		s += std::max(ceil(log2(2*alpha/(nextafter(1.0,2.0)-1.0))/(2.0*m)),0.0);
+
+		if (isinf(s) != 0)
+			s = ceil(log2(inmatrix.Norm1() / thetam));
+
+		if (s != 0)
+		{
+			A *= MISCMATHS::pow(half, s);
+			A2 *= MISCMATHS::pow(half, s*2);
+			A4 *= MISCMATHS::pow(half, s*4);
+			A6 *= MISCMATHS::pow(half, s*6);
+		}
+
+		U = A
 				* (A6 * (coeff(14) * A6 + coeff(12) * A4 + coeff(10) * A2)
 						+ coeff(8) * A6 + coeff(6) * A4 + coeff(4) * A2
 						+ coeff(2) * I);
@@ -1764,10 +1799,6 @@ void CESTFwdModel::Mz_spectrum_SS(
 	ColumnVector Mtemp = (M.Row(3)).AsColumn();
 	Mz = abs(Mtemp/Mtemp.Maximum())*M0(1);
 
-	cout << "Mz:\n" << Mz << endl;
-	int xx;
-	cin >> xx;
-
 }
 
 
@@ -1894,8 +1925,7 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 		Right after this rest, the magnetization is excited into the XY plane.
 	*/
 
-	Matrix Es ((mpool-1)*3+1,(mpool-1)*3+1);
-	Es = expm(A*3e-3);
+	Matrix Es = expm(A*3e-3);
 
 	// Create Excitation Matrix
 
@@ -1929,11 +1959,6 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 	ColumnVector gb(wvec);
 	gb = absLineShape(wvec - wi.Row(mpool).t(),T12(2,mpool));
 
-	//	Wb = zeros(size(B1e));
-	//	for ii = 1:length(tm)
-	//	    Wb(ii,:) = pi*gamma^2*gb.*B1e(ii,:).^2;
-	//	end
-
 
 	/**********************************************************************
 	 *					Solve for Mz
@@ -1944,8 +1969,7 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 		if (w1(k) == 0.0)
 		{
 			// no saturation image - the z water magnetization is just a normal FLASH sequence
-			Matrix Er0 ((mpool-1)*3+1, (mpool-1)*3+1);
-		    Er0 = expm(A*m_TR(1));
+			Matrix Er0 = expm(A*m_TR(1));
 		    ColumnVector Mz0 ((mpool-1)*3+1);
 		    Matrix Er0Temp ((mpool-1)*3+1, (mpool-1)*3+1);
 		    Er0Temp = (Eye-Spoil*C*Er0);
@@ -1974,48 +1998,38 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 				}
 				W((mpool-1)*3+1,(mpool-1)*3+1) = -M_PI*gb(k)*1e-6*w1(k)*pmagvec(jj)*w1(k)*pmagvec(jj);
 
-				Matrix Em ((mpool-1)*3+1, (mpool-1)*3+1);
-
-				Em = 0.0;
+				Matrix Em = expm((A+W)*ptvec(jj));
 
 				// Need to determine why the expm function is giving incorrect values around 3 ppm
 				if (k == 6)
 				{
-					cout << "wvec(" << k << "):\n" << -wvec(k)/42.58/2/M_PI/4.7 << endl;
-//					cout << "A:\n" << A << endl;
+//					cout << "wvec(" << k << "):\n" << -wvec(k)/42.58/2/M_PI/4.7 << endl;
 //					cout << "W:\n" << W << endl;
 //					cout << "ptvec:\n" << ptvec(jj) << endl;
 //					cout << "Em:\n" << Em << endl;
-					Em = expm((A+W)*ptvec(jj));
-					int xx;
-					cin >> xx;
+//					int xx;
+//					cin >> xx;
 				}
 
 				if (jj == 1)
 				{
 					Emt = Em;
-					Matrix RlW0 ((mpool-1)*3+1,(mpool-1)*3+1);
-					RlW0 = A+W;
+					Matrix RlW0 = A+W;
 					Ems = (Eye-Em)*RlW0.i();
 				}
 				else
 				{
 					Emt = Em*Emt;
-					Matrix RlW0 ((mpool-1)*3+1,(mpool-1)*3+1);
-					RlW0 = A+W;
+					Matrix RlW0 = A+W;
 					Ems = Em*Ems+(Eye-Em)*RlW0.i();
 				}
 
 			}
 
 			// Build the Pulse Train
-			Matrix Emdc (Emt);
-			Emdc = mpower(Emt*iSpoil*Edc,t(k)-1);
-
-			Matrix Emm (Emt);
-			Emm = Eye;
-			Matrix Emb (Emt);
-			Emb = Eye;
+			Matrix Emdc = mpower(Emt*iSpoil*Edc,t(k)-1);
+			Matrix Emm = Eye;
+			Matrix Emb = Eye;
 
 			for (int jj=1; jj < t(k); ++jj)
 			{
@@ -2025,8 +2039,7 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 			}
 
 
-			Matrix Mztemp (Emt);
-			Mztemp = Eye - Es*Emdc*Emt*Spoil*Er*C*Spoil;
+			Matrix Mztemp = Eye - Es*Emdc*Emt*Spoil*Er*C*Spoil;
 
 			M.Column(k) = Mztemp.i() * (Es*Emdc*Emt*Spoil*(Eye-Er)+Es*Emb*Emt*iSpoil*(Eye-Edc)
 					+Eye-Es+Es*Emm*Ems*A)*M0i;
@@ -2037,21 +2050,47 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 	ColumnVector Mtemp = (M.Row(3)).AsColumn();
 	Mz = abs(Mtemp/Mtemp.Maximum())*M0(1);
 
-	cout << "Mz:\n" << Mz << endl;
-	int xx;
-	cin >> xx;
-
-
 }
 
 // Function that will raise a matrix to a power Power
 inline ReturnMatrix CESTFwdModel::mpower(const Matrix& Mat_Base, int Power) const
 {
 	Matrix MExp;
-	MExp = Mat_Base;
-	for (int ii{1}; ii< Power; ++ii)
-		MExp *= Mat_Base;
-
+	if (Power == 2)
+	    MExp = Mat_Base*Mat_Base;
+	else if (Power == 3)
+		MExp = Mat_Base*Mat_Base*Mat_Base;
+	else if (Power == 0)
+	{
+		IdentityMatrix Eye(MExp);
+		return Eye;
+	}
+	else
+	{
+		int p = abs(Power);
+	    Matrix D = Mat_Base;
+	    bool first {true};
+	    while (p > 0)
+	    {
+	        if (p % 2 == 1) //if odd
+	        {
+	            if (first)
+	            {
+	                MExp = D;  // hit first time. D*I
+	                first = false;
+	            }
+	            else
+	            {
+	                MExp = D*MExp;
+	            }
+	        }
+	        p = floor(p/2);
+	        if (p != 0)
+	            D = D*D;
+	    }
+	    if (Power < 0)
+	    	MExp = MExp.i();
+	}
 	return MExp;
 }
 
