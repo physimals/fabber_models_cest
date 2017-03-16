@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.7)
 
 set(MODELS_NAME cest)
-set(MODELS_SRC fwdmodel_cest.cc) 
+set(MODELS_SRC fwdmodel_cest.cc)
 
 add_library(fabber_models_${MODELS_NAME} SHARED ${MODELS_SRC} ${MODELS_NAME}_models.cc)
 add_executable(fabber_${MODELS_NAME} ${MODELS_SRC} fabber_client.cc)
@@ -30,9 +30,9 @@ Message("-- FSL headers in ${FSL_INCLUDE_DIR} ${NEWMAT_INCLUDE_DIR} ${FSL_EXT_IN
 Message("-- Fabber headers in ${FABBER_INCLUDE_DIR}/fabber_core")
 
 find_library(FABBER_LIBRARY NAMES fabbercore libfabbercore
-             HINTS $ENV{FSLDIR}/lib ../fabber_core/Release ../fabber_core/Debug REQUIRED )
+             HINTS $ENV{FSLDIR}/lib ../fabber_core/Release ../fabber_core/release ../fabber_core/Debug ../fabber_core/debug REQUIRED )
 find_library(FABBER_EXEC_LIBRARY NAMES fabberexec libfabberexec
-             HINTS $ENV{FSLDIR}/lib ../fabber_core/Release ../fabber_core/Debug REQUIRED )
+             HINTS $ENV{FSLDIR}/lib ../fabber_core/Release ../fabber_core/release ../fabber_core/Debug ../fabber_core/debug REQUIRED )
 find_library(NEWMAT_LIBRARY NAMES newmat libnewmat
              HINTS $ENV{FSLDIR}/extras/lib REQUIRED )
 find_library(MISCMATHS_LIBRARY NAMES miscmaths libmiscmaths
@@ -52,6 +52,8 @@ find_library(PROB_LIBRARY NAMES prob libprob
 
 set(LIBS ${FABBER_LIBRARY} ${FABBER_EXEC_LIBRARY}  ${NEWIMAGE_LIBRARY} ${FSLIO_LIBRARY} ${MISCMATHS_LIBRARY} ${NIFTIIO_LIBRARY} ${ZNZ_LIBRARY} ${Z_LIBRARY} ${NEWMAT_LIBRARY} ${PROB_LIBRARY})
 
+
+
 if (UNIX)
   set(LIBS ${LIBS} dl)
 endif(UNIX)
@@ -67,8 +69,12 @@ Message("-- Using newimage: ${NEWIMAGE_LIBRARY}")
 Message("-- Using prob: ${PROB_LIBRARY}")
 Message("-- Using zlib: ${Z_LIBRARY}")
 
-target_link_libraries(fabber_models_${MODELS_NAME} ${LIBS})
-target_link_libraries(fabber_${MODELS_NAME} ${LIBS})
+include_directories ("${PROJECT_SOURCE_DIR}/Alglib")
+add_subdirectory (Alglib)
+set (ALGLIB ${ALGLIB} Alglib)
+
+target_link_libraries(fabber_models_${MODELS_NAME} ${LIBS} ${ALGLIB})
+target_link_libraries(fabber_${MODELS_NAME} ${LIBS} ${ALGLIB})
 
 include_directories(SYSTEM ${FABBER_INCLUDE_DIR} ${NEWMAT_INCLUDE_DIR} ${FSL_INCLUDE_DIR} ${FSL_EXT_INCLUDE_DIR} ${FSL_EXT_INCLUDE_DIR}/libprob ${BOOST_INCLUDE_DIR})
 

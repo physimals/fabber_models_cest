@@ -67,8 +67,18 @@ protected:
 			const NEWMAT::Matrix& wi, const NEWMAT::Matrix& kij,
 			const NEWMAT::Matrix& T12, const NEWMAT::ColumnVector& w1EX) const;
 
-	// Function to raise a matrix to a power Power;
+	// Steady State Mz Spectrum using an MT Lineshape
+	void Mz_spectrum_SS_LineShape( NEWMAT::ColumnVector& Mz, const NEWMAT::ColumnVector& wvec,
+			const NEWMAT::ColumnVector& w1, const NEWMAT::ColumnVector& t,
+			const NEWMAT::ColumnVector& M0,	const NEWMAT::Matrix& wi,
+			const NEWMAT::Matrix& kij, const NEWMAT::Matrix& T12, const NEWMAT::ColumnVector& w1EX) const;
+
+	// Function to raise a matrix to a power
 	inline NEWMAT::ReturnMatrix mpower(const NEWMAT::Matrix& Mat_Base, int Power) const;
+	inline NEWMAT::ReturnMatrix spower(const NEWMAT::Matrix& Mat_Base, int Power) const;
+
+	// Function to create a lineshape if an MT pool is present
+	NEWMAT::ReturnMatrix absLineShape(const NEWMAT::ColumnVector& wvec, double T2) const;
 
 	//maths functions
 	void Ainverse(const NEWMAT::Matrix A, NEWMAT::RowVector& Ai) const;
@@ -132,8 +142,12 @@ protected:
 	//Readout specifications
 	NEWMAT::ColumnVector m_TR;
 
-	// Bool for New Steady State Sequence
-	bool m_SS;
+	// Flags for New Steady State Sequence
+	bool m_SS; // Flag to use steady state sequence
+	bool m_InterSpoil; // Flag to use interpulse saturation spoiling
+
+	string m_lineshape; // String that describes which lineshape to use
+
 
 	// processing flags
 	mutable bool fastgrad; //use a fast approximation to the expm because we are caculating the gradient

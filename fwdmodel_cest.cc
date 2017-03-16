@@ -13,6 +13,8 @@
 #include <stdexcept>
 #include "newimage/newimageall.h"
 #include "miscmaths/miscprob.h"
+#include "Alglib/stdafx.h"
+#include "Alglib/interpolation.h"
 using namespace NEWIMAGE;
 #include "fabber_core/easylog.h"
 
@@ -39,6 +41,12 @@ static OptionSpec OPTIONS[] =
 				OPT_NONREQ, "" },
 		{ "steadystate", OPT_BOOL,
 				"Alternative to Matrix exponential solution to Bloch equations",
+				OPT_NONREQ, "" },
+		{ "readspec", OPT_MATRIX,
+				"ASCII matrix containing readout specification",
+				OPT_NONREQ, "" },
+		{ "satspoil", OPT_BOOL,
+				"Perform saturation interpulse spoiling for saturation pulse trains",
 				OPT_NONREQ, "" },
 		{ "" }, };
 
@@ -585,7 +593,10 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 		{
 			// Only need to fix w1EX if using SS CEST
 			ColumnVector w1EX = m_EXmagMax * (1+B1off);
-			Mz_spectrum_SS(result, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
+			if (m_lineshape == "none")
+				Mz_spectrum_SS(result, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
+			else
+				Mz_spectrum_SS_LineShape(result, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
 		}
 		else
 		{
@@ -637,7 +648,7 @@ void CESTFwdModel::Initialize(ArgsType& args)
 
 	Matrix poolmat; // matrix containing setup information for the pools
 	//  columns: res. freq (rel. to water) (ppm), rate (species-> water), T1, T2.
-	// 1st row is water, col 1 will be interpreted as the actaul centre freq of water if value is >0, col 2 will be ignored.
+	// 1st row is water, col 1 will be interpreted as the actual centre freq of water if value is >0, col 2 will be ignored.
 	// Further rows for pools to be modelled.
 
 	Matrix expoolmat; //Matrix for the 'extra' pools
@@ -646,7 +657,10 @@ void CESTFwdModel::Initialize(ArgsType& args)
 	string pulsematfile;
 	string Readmatfile;
 
+
 	t12soft = false; //pvcorr=false;
+
+	m_InterSpoil = false;
 
 	if (scanParams == "cmdline")
 	{
@@ -674,6 +688,11 @@ void CESTFwdModel::Initialize(ArgsType& args)
 		lorentz = args.ReadBool("lorentz"); //NB only compatible with single pool
 		steadystate = args.ReadBool("steadystate");
 
+		// Use Interpulse Spoiling
+		m_InterSpoil = args.GetBool("satspoil");
+
+		// Use Lineshape for MT pool
+		m_lineshape = args.GetStringDefault("lineshape", "none");
 	}
 
 	else
@@ -689,8 +708,9 @@ void CESTFwdModel::Initialize(ArgsType& args)
 	}
 	// water centre
 	float wdefault = 42.58e6 * 3 * 2 * M_PI; //the default centre freq. (3T)
+	// Should be negative to reflect conversion between ppm and Hz
 	if (poolmat(1, 1) > 0)
-		wlam = -poolmat(1, 1) * 2 * M_PI; // Should be negative to reflect conversion between ppm and Hz
+		wlam = -poolmat(1, 1) * 2 * M_PI;
 	else
 		wlam = -wdefault;
 	// ppm offsets
@@ -758,7 +778,7 @@ void CESTFwdModel::Initialize(ArgsType& args)
 
 	//ppm_apt = -3.5;
 	//ppm_mt = -2.41;
-	// setup vectors that specify deatils of each data point
+	// setup vectors that specify details of each data point
 	// sampling frequency
 	wvec = dataspec.Column(1) * wlam / 1e6;
 	// B1 value, convert to radians equivalent
@@ -790,7 +810,7 @@ void CESTFwdModel::Initialize(ArgsType& args)
 	if (pulsematfile == "none")
 	{
 		cout
-				<< "WARNGING! - you should supply a pulsemat file, in future the calling of this model without one (to get continuous saturation) will be depreceated"
+				<< "WARNING! - you should supply a pulsemat file, in future the calling of this model without one (to get continuous saturation) will be depreceated"
 				<< endl;
 		nseg = 1;
 		pmagvec.ReSize(1);
@@ -1010,7 +1030,7 @@ ReturnMatrix CESTFwdModel::expm_eig(Matrix inmatrix) const
 ReturnMatrix CESTFwdModel::expm_pade(Matrix inmatrix) const
 {
 	// Do matrix exponential
-	// Algorithm from Higham, SIAM J. Matrix Analysis App. 24(4) 2005, 1179-1193
+	// Algorithm from Higham, SIAM J. Matrix Analysis App. 26(4) 2005, 1179-1193
 
 	Matrix A = inmatrix;
 	Matrix X(A.Nrows(), A.Ncols());
@@ -1044,7 +1064,7 @@ ReturnMatrix CESTFwdModel::expm_pade(Matrix inmatrix) const
 			// Using Pade Approximant degree 13 and scaling and squaring
 			//cout << "Doing m = 13" << endl;
 			int s = ceil(log2(A.Norm1() / thetam[4]));
-			//cout << s << endl;
+			cout << s << endl;
 			float half = 0.5;
 			A *= MISCMATHS::pow(half, s);
 			X = PadeApproximant(A, 13);
@@ -1056,7 +1076,6 @@ ReturnMatrix CESTFwdModel::expm_pade(Matrix inmatrix) const
 		}
 		i++;
 	}
-
 	return X;
 }
 
@@ -1540,6 +1559,9 @@ void CESTFwdModel::Mz_spectrum_SS(
 	int mpool = M0.Nrows();
 
 
+	// Create general purpose Identity Matrix;
+	IdentityMatrix Eye(mpool*3);
+
 	Mz.ReSize(nfreq);
 	Mz = 0.0;
 
@@ -1602,12 +1624,22 @@ void CESTFwdModel::Mz_spectrum_SS(
 
 	// Create Spoiling Matrix Using Square matrix with Transverse elements = 0
 
-	Matrix Spoil (mpool * 3, mpool * 3);
+	DiagonalMatrix Spoil (mpool * 3);
 	Spoil = 0.0;
 	for (int i = 1; i<= mpool; ++i)
 	{
 		st = i*3;
-		Spoil(st,st) = 1.0;
+		Spoil(st) = 1.0;
+	}
+
+	DiagonalMatrix iSpoil (Spoil);
+	if (m_InterSpoil)
+	{
+		iSpoil = Spoil;
+	}
+	else
+	{
+		iSpoil = Eye;
 	}
 
 	// Create End of Saturation Pulse Train Spoiling Delay Matrix with arbitrary 3 ms time
@@ -1619,7 +1651,6 @@ void CESTFwdModel::Mz_spectrum_SS(
 	Es = expm(A*3e-3);
 
 	// Create Excitation Matrix
-	IdentityMatrix Eye(mpool*3);
 
 	DiagonalMatrix C (mpool*3);
 	C = 0.0;
@@ -1706,7 +1737,7 @@ void CESTFwdModel::Mz_spectrum_SS(
 
 			// Build the Pulse Train
 			Matrix Emdc (Emt);
-			Emdc = mpower(Emt*Edc,t(k)-1);
+			Emdc = mpower(Emt*iSpoil*Edc,t(k)-1);
 
 			Matrix Emm (Emt);
 			Emm = Eye;
@@ -1717,14 +1748,14 @@ void CESTFwdModel::Mz_spectrum_SS(
 			{
 				if (jj == t(k)-1)
 					Emb = Emm;
-				Emm += mpower(Emt*Edc,jj);
+				Emm += mpower(Emt*iSpoil*Edc,jj);
 			}
 
 
 			Matrix Mztemp (Emt);
 			Mztemp = Eye - Es*Emdc*Emt*Spoil*Er*C*Spoil;
 
-			M.Column(k) = Mztemp.i() * (Es*Emdc*Emt*Spoil*(Eye-Er)+Es*Emb*Emt*(Eye-Edc)
+			M.Column(k) = Mztemp.i() * (Es*Emdc*Emt*Spoil*(Eye-Er)+Es*Emb*Emt*iSpoil*(Eye-Edc)
 					+Eye-Es+Es*Emm*Ems*A)*M0i;
 
 		}
@@ -1732,6 +1763,283 @@ void CESTFwdModel::Mz_spectrum_SS(
 
 	ColumnVector Mtemp = (M.Row(3)).AsColumn();
 	Mz = abs(Mtemp/Mtemp.Maximum())*M0(1);
+
+	cout << "Mz:\n" << Mz << endl;
+	int xx;
+	cin >> xx;
+
+}
+
+
+// Models the Bloch-McConnell equations based on Listerud, Magn Reson Med 1997; 37: 693–705.
+void CESTFwdModel::Mz_spectrum_SS_LineShape(
+		ColumnVector& Mz,			// Vector: Magnetization
+		const ColumnVector& wvec, 	// Vector: Saturation Pulse Offset (radians/s = ppm * 42.58*B0*2*pi)
+		const ColumnVector& w1,   	// Vector: B1-corrected Saturation Pulse (radians = uT*42.58*2*pi)
+		const ColumnVector& t,    	// Vector: Number Pulses
+		const ColumnVector& M0,		// Vector: Pool Sizes
+		const Matrix& wi,			// Matrix: Pool offsets (radians/s = ppm * 42.58*B0*2*pi)
+		const Matrix& kij,			// Matrix: exchange rates for each pool (see below for in depth description)
+		const Matrix& T12,			// Matrix: T1's (Row 1) and T2's (Row 2)
+		const ColumnVector& w1EX     // Vector: B1-corrected Excitation Flip Angle
+) const
+{
+
+	/*********************************************************************
+	 * Description of Exchange Rate Matrix
+	 *********************************************************************
+	 3 Pool for example (Water - f, MT - m, Solute - s)
+	 	  [  0		kfm		kfs ]
+	 kij =[  kmf     0		0	]
+	  	  [	 ksf	 0		0	]
+
+
+	 *********************************************************************/
+
+	// total number of samples collected
+	int nfreq = wvec.Nrows();
+
+	// Number of Pools to be solved
+	int mpool = M0.Nrows();
+
+	// Create general purpose Identity Matrix;
+	IdentityMatrix Eye((mpool-1)*3+1);
+
+	Mz.ReSize(nfreq);
+	Mz = 0.0;
+
+	/**********************************************************************
+	 *					Assemble model matrices
+	 **********************************************************************/
+
+	// Find Diagonals of Relaxation Matrix
+	ColumnVector k1i(mpool);
+	ColumnVector k2i(mpool);
+	for (int i = 1; i <= mpool; i++)
+	{
+		k1i(i) = 1 / T12(1, i) + (kij.Row(i)).Sum();
+		k2i(i) = 1 / T12(2, i) + (kij.Row(i)).Sum();
+	}
+
+	// Populate Diagonals of Relaxation Matrix
+	Matrix A((mpool-1)*3+1, (mpool-1)*3+1);
+	A = 0.0;
+	int st = 0;
+	for (int i = 1; i <= mpool-1; i++)
+	{
+		Matrix D(3, 3);
+		D = 0.0;
+		D(1, 1) = -k2i(i);
+		D(2, 2) = -k2i(i);
+		D(3, 3) = -k1i(i);
+		st = (i - 1) * 3;
+		A.SubMatrix(st + 1, st + 3, st + 1, st + 3) = D;
+	}
+	A((mpool-1)*3+1,(mpool-1)*3+1) = -k1i(mpool);
+
+	// Populate Exchange Parameters of Relaxation Matrix
+	int st2 = 0;
+	IdentityMatrix I(3);
+	for (int i = 1; i <= mpool-1; i++)
+	{
+		for (int j = 1; j <= mpool-1; j++)
+		{
+			if (i != j)
+			{
+				st = (i - 1) * 3;
+				st2 = (j - 1) * 3;
+				A.SubMatrix(st + 1, st + 3, st2 + 1, st2 + 3) = I * kij(j, i); //NB 'reversal' of indices is correct here
+			}
+		}
+	}
+	A(3,(mpool-1)*3+1) = kij(mpool,1); //NB 'reversal' of indices is correct here
+	A((mpool-1)*3+1,3) = kij(1,mpool); //NB 'reversal' of indices is correct here
+
+
+	// Find Readout Matrix
+
+	double Tr = m_TR(1);
+	Tr -= ptvec.Rows(1,ptvec.Nrows()-1).Sum()*t(1);
+	Tr -= ptvec(ptvec.Nrows())*(t(1)-1);
+
+	Matrix Er = expm(A*Tr);
+
+	// Find CEST Saturation Train Pause (for Duty Cycle < 1.0) Matrix
+	float Tdc = ptvec(ptvec.Nrows());
+	Matrix Edc = expm(A*Tdc);
+
+	// Create Spoiling Matrix Using Square matrix with Transverse elements = 0
+
+	DiagonalMatrix Spoil ((mpool-1)*3+1);
+	Spoil = 0.0;
+	for (int i = 1; i<= mpool-1; ++i)
+	{
+		st = i*3;
+		Spoil(st) = 1.0;
+	}
+	Spoil((mpool-1)*3+1) = 1.0;
+
+	DiagonalMatrix iSpoil (Spoil);
+	if (m_InterSpoil)
+	{
+		iSpoil = Spoil;
+	}
+	else
+	{
+		iSpoil = Eye;
+	}
+
+	// Create End of Saturation Pulse Train Spoiling Delay Matrix with arbitrary 3 ms time
+	/* 	NB: This is also the point in time where the magnetization vector, Mz, is solved for.
+		Right after this rest, the magnetization is excited into the XY plane.
+	*/
+
+	Matrix Es ((mpool-1)*3+1,(mpool-1)*3+1);
+	Es = expm(A*3e-3);
+
+	// Create Excitation Matrix
+
+	DiagonalMatrix C ((mpool-1)*3+1);
+	C = 0.0;
+
+	for (int i = 0; i < mpool-1; i++)
+	{
+		C(3*i+1) = sin(w1EX(1));
+		C(3*i+2) = sin(w1EX(1));
+		C(3*i+3) = cos(w1EX(1));
+	}
+	C((mpool-1)*3+1) = cos(w1EX(1));
+
+	// Create M0i Vector
+
+	ColumnVector M0i((mpool-1)*3+1);
+	M0i = 0.0;
+
+	for (int i = 1; i <= mpool-1; i++)
+	{
+		M0i(i * 3) = M0(i);
+	}
+	M0i((mpool-1)*3+1) = M0(mpool);
+
+
+	Matrix M((mpool-1)*3+1, nfreq);
+	M = 0.0;
+
+	// Calculate MT RF saturation rate
+	ColumnVector gb(wvec);
+	gb = absLineShape(wvec - wi.Row(mpool).t(),T12(2,mpool));
+
+	//	Wb = zeros(size(B1e));
+	//	for ii = 1:length(tm)
+	//	    Wb(ii,:) = pi*gamma^2*gb.*B1e(ii,:).^2;
+	//	end
+
+
+	/**********************************************************************
+	 *					Solve for Mz
+	 **********************************************************************/
+
+	for (int k = 1; k <= nfreq; k++)
+	{
+		if (w1(k) == 0.0)
+		{
+			// no saturation image - the z water magnetization is just a normal FLASH sequence
+			Matrix Er0 ((mpool-1)*3+1, (mpool-1)*3+1);
+		    Er0 = expm(A*m_TR(1));
+		    ColumnVector Mz0 ((mpool-1)*3+1);
+		    Matrix Er0Temp ((mpool-1)*3+1, (mpool-1)*3+1);
+		    Er0Temp = (Eye-Spoil*C*Er0);
+		    Mz0 = Er0Temp.i()*((Eye-Er0)*M0i);
+		    M(3, k) = Mz0(3);
+		}
+		else
+		{
+			Matrix Ems ((mpool-1)*3+1, (mpool-1)*3+1);
+			Matrix Emt ((mpool-1)*3+1, (mpool-1)*3+1);
+
+			for (int jj = 1; jj <= nseg-1; ++jj)
+			{
+				Matrix W ((mpool-1)*3+1, (mpool-1)*3+1);
+				W = 0.0;
+				for (int nn = 1; nn <= mpool-1; ++nn)
+				{
+					Matrix Ws (3, 3);
+					Ws = 0.0;
+					Ws(2,1) = (wvec(k) - wi(nn,k));
+					Ws(1,2) = -Ws(2,1);
+					Ws(3,2) = w1(k)*pmagvec(jj);
+					Ws(2,3) = -Ws(3,2);
+					st = (nn - 1) * 3;
+					W.SubMatrix(st + 1, st + 3, st + 1, st + 3) = Ws;
+				}
+				W((mpool-1)*3+1,(mpool-1)*3+1) = -M_PI*gb(k)*1e-6*w1(k)*pmagvec(jj)*w1(k)*pmagvec(jj);
+
+				Matrix Em ((mpool-1)*3+1, (mpool-1)*3+1);
+
+				Em = 0.0;
+
+				// Need to determine why the expm function is giving incorrect values around 3 ppm
+				if (k == 6)
+				{
+					cout << "wvec(" << k << "):\n" << -wvec(k)/42.58/2/M_PI/4.7 << endl;
+//					cout << "A:\n" << A << endl;
+//					cout << "W:\n" << W << endl;
+//					cout << "ptvec:\n" << ptvec(jj) << endl;
+//					cout << "Em:\n" << Em << endl;
+					Em = expm((A+W)*ptvec(jj));
+					int xx;
+					cin >> xx;
+				}
+
+				if (jj == 1)
+				{
+					Emt = Em;
+					Matrix RlW0 ((mpool-1)*3+1,(mpool-1)*3+1);
+					RlW0 = A+W;
+					Ems = (Eye-Em)*RlW0.i();
+				}
+				else
+				{
+					Emt = Em*Emt;
+					Matrix RlW0 ((mpool-1)*3+1,(mpool-1)*3+1);
+					RlW0 = A+W;
+					Ems = Em*Ems+(Eye-Em)*RlW0.i();
+				}
+
+			}
+
+			// Build the Pulse Train
+			Matrix Emdc (Emt);
+			Emdc = mpower(Emt*iSpoil*Edc,t(k)-1);
+
+			Matrix Emm (Emt);
+			Emm = Eye;
+			Matrix Emb (Emt);
+			Emb = Eye;
+
+			for (int jj=1; jj < t(k); ++jj)
+			{
+				if (jj == t(k)-1)
+					Emb = Emm;
+				Emm += mpower(Emt*iSpoil*Edc,jj);
+			}
+
+
+			Matrix Mztemp (Emt);
+			Mztemp = Eye - Es*Emdc*Emt*Spoil*Er*C*Spoil;
+
+			M.Column(k) = Mztemp.i() * (Es*Emdc*Emt*Spoil*(Eye-Er)+Es*Emb*Emt*iSpoil*(Eye-Edc)
+					+Eye-Es+Es*Emm*Ems*A)*M0i;
+
+		}
+	}
+
+	ColumnVector Mtemp = (M.Row(3)).AsColumn();
+	Mz = abs(Mtemp/Mtemp.Maximum())*M0(1);
+
+	cout << "Mz:\n" << Mz << endl;
+	int xx;
+	cin >> xx;
 
 
 }
@@ -1745,4 +2053,112 @@ inline ReturnMatrix CESTFwdModel::mpower(const Matrix& Mat_Base, int Power) cons
 		MExp *= Mat_Base;
 
 	return MExp;
+}
+
+// Function that will raise each element in a matrix to a power
+inline ReturnMatrix CESTFwdModel::spower(const Matrix& Mat_Base, int Power) const
+{
+	Matrix MExp (Mat_Base);
+	for (int ii{1}; ii< Power; ++ii)
+		for (int jj{1}; jj <= Mat_Base.Nrows(); ++jj)
+			for (int kk{1}; kk <= Mat_Base.Ncols(); ++kk)
+				MExp(jj,kk) *= Mat_Base(jj,kk);
+
+	return MExp;
+}
+
+
+// Helper function for absLineShape to create a linear vector of values
+ReturnMatrix linspace(double a, double b, int n) {
+    ColumnVector array(n);
+    array = 0.0;
+    array(1) = a;
+    double step = (b-a) / (n-1);
+
+    for (int ii {2}; ii <=n; ++ii)
+    {
+
+        array(ii) = array(ii-1) + step;
+    }
+    return array;
+}
+
+
+/************************************************************************
+ *  		Absorption Line Shape Function for the MT pool:
+ *  		-Can approximate a Lorentzian, Gaussian, or Super-Lorentzian
+ *  		lineshape.
+ *  		-The Super-Lorentzian lineshape has a singularity at 0, so it
+ *  		is approximated from 1000 Hz inwards.
+ *  		-All lineshapes are also multiplied by 1e6 to
+ *  		reduce rounding errors
+ ************************************************************************/
+ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& wvec, double T2) const
+{
+	if (m_lineshape == "Lorentzian" || m_lineshape == "lorentzian")
+	{
+
+		ColumnVector tmp = (1+spower(wvec*T2,2));
+		for (int ii{1}; ii <=wvec.Nrows(); ++ii)
+		{
+			tmp.Row(ii) = 1/tmp(ii);
+		}
+		tmp = (T2/M_PI)*tmp*1e6;
+		return tmp;
+	}
+	else if (m_lineshape == "SuperLorentzian" || m_lineshape == "superlorentzian" || m_lineshape == "Superlorentzian")
+	{
+		int cutoff = 1000*2*M_PI;
+		ColumnVector u = linspace(0, 1, 500);
+		ColumnVector deltac (2e3);
+		deltac = 0.0;
+
+		deltac.SubMatrix(1,1000,1,1) = linspace(-1e5*2*M_PI,-cutoff,1e3);
+		deltac.SubMatrix(1001,2e3,1,1) = linspace(cutoff,1e5*2*M_PI,1e3);
+
+		double du = u(2)-u(1);
+		Matrix f(2e3,u.Nrows());
+
+		ColumnVector tmp1 = abs(3*spower(u,2)-1);
+		for (int ii{1}; ii <=u.Nrows(); ++ii)
+		{
+			f.Column(ii) = 1e6*sqrt(2/M_PI)*T2*1/tmp1(ii)*exp(-2*spower(1/tmp1(ii)*deltac*T2,2));
+		}
+
+		using namespace alglib;
+		real_1d_array gg;
+		gg.setlength(2e3);
+		real_1d_array gc;
+		gc.setlength(2e3);
+		for (int ii{1}; ii <= deltac.Nrows(); ++ii)
+		{
+			gc(ii-1) = f.Row(ii).Sum()*du;
+			gg(ii-1) = deltac(ii);
+		}
+
+		spline1dinterpolant s;
+		ae_int_t natural_bound_type = 2;
+		spline1dbuildcubic(gg, gc, s);
+
+		ColumnVector g(wvec);
+		g = 0.0;
+		for (int ii{1}; ii <= wvec.Nrows(); ++ii)
+		{
+			g(ii) = spline1dcalc(s, wvec(ii));
+		}
+
+		return g;
+	}
+	else if (m_lineshape == "Gaussian" || m_lineshape == "gaussian")
+	{
+		ColumnVector tmp = (T2/sqrt(2*M_PI))*exp(-spower(wvec*T2,2)/2)*1e6;
+		return tmp;
+	}
+	else
+	{
+		cout << "CEST Lineshape: No Known Lineshape Selected" << endl;
+		ColumnVector tmp(wvec);
+		tmp = 0.0;
+		return tmp;
+	}
 }
