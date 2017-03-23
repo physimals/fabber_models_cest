@@ -43,9 +43,10 @@ static OptionSpec OPTIONS[] =
 		{ "steadystate", OPT_BOOL,
 				"Alternative to Matrix exponential solution to Bloch equations",
 				OPT_NONREQ, "" },
-		{ "readspec", OPT_MATRIX,
-				"ASCII matrix containing readout specification",
-				OPT_NONREQ, "" },
+		{ "TR", OPT_MATRIX,
+				"TR in seconds", OPT_NONREQ, "" },
+		{ "EXFA", OPT_MATRIX,
+				"Excitation flip angle in degrees", OPT_NONREQ, "" },
 		{ "satspoil", OPT_BOOL,
 				"Perform saturation interpulse spoiling for saturation pulse trains",
 				OPT_NONREQ, "" },
@@ -593,7 +594,7 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 		if (m_SS)
 		{
 			// Only need to fix w1EX if using SS CEST
-			ColumnVector w1EX = m_EXmagMax * (1+B1off);
+			double w1EX = m_EXmagMax * (1+B1off);
 			if (m_lineshape == "none")
 				Mz_spectrum_SS(result, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
 			else
@@ -656,8 +657,6 @@ void CESTFwdModel::Initialize(ArgsType& args)
 
 	string expoolmatfile;
 	string pulsematfile;
-	string Readmatfile;
-
 
 	t12soft = false; //pvcorr=false;
 
@@ -677,9 +676,6 @@ void CESTFwdModel::Initialize(ArgsType& args)
 		//read pulsed saturation specification
 		pulsematfile = args.ReadWithDefault("ptrain", "none");
 
-		//read readout specification
-		Readmatfile = args.ReadWithDefault("readspec", "none");
-
 		//basic  = args.ReadBool("basic");
 		//      pvcorr = args.ReadBool("pvcorr");
 		t12soft = args.ReadBool("t12prior");
@@ -694,6 +690,10 @@ void CESTFwdModel::Initialize(ArgsType& args)
 
 		// Use Lineshape for MT pool
 		m_lineshape = args.GetStringDefault("lineshape", "none");
+
+		// Use Readout Parameters
+		m_TR = args.GetDoubleDefault("TR",-1.0);
+		m_EXmagMax = args.GetDoubleDefault("EXFA",-1.0);
 	}
 
 	else
@@ -827,7 +827,7 @@ void CESTFwdModel::Initialize(ArgsType& args)
 		pulsemat = read_ascii_matrix(pulsematfile);
 		pmagvec = pulsemat.Column(1); //vector of (relative) magnitude values for each segment
 		// vector of time durations for each segment
-		// note that we are loding in a vector of times for the end of each segment
+		// note that we are loading in a vector of times for the end of each segment
 		ColumnVector pttemp = pulsemat.Column(2);
 		ColumnVector nought(1);
 		nought = 0.0;
@@ -844,27 +844,38 @@ void CESTFwdModel::Initialize(ArgsType& args)
 
 	//Steady State Modeling
 	// For Modeling the steady state Signal according to Listerud, Magn Reson Med 1997; 37: 693–705.
-	if (Readmatfile == "none")
+	if (m_TR > 0.0 && m_EXmagMax > 0.0)
 	{
+		m_SS = true;
+
+		LOG << "\nRunning Steady State CEST Model Based upon Listerud, MRM: 37 (1997)\n" << endl;
+
+		LOG << "TR (s): \t" << m_TR << endl;
+
+		LOG << "Excitation Flip Angle (Degrees):\t" << m_EXmagMax << endl << endl;
+		m_EXmagMax *= M_PI/180;
+
+	}
+	else if (m_TR > 0.0 && m_EXmagMax <= 0.0)
+	{
+		cout
+			<< "WARNING! - you supplied a TR, but no Excitation flip angle (--EXFA).  Will run Original Fabber CEST Model"
+			<< endl;
+		m_SS = false;
+		LOG << "Running Original Fabber CEST Method" << endl;
+	}
+	else if (m_TR <= 0.0 && m_EXmagMax > 0.0)
+	{
+		cout
+		<< "WARNING! - you supplied an Excitation flip angle, but no TR (--TR).  Will run Original Fabber CEST Model"
+		<< endl;
 		m_SS = false;
 		LOG << "Running Original Fabber CEST Method" << endl;
 	}
 	else
 	{
-		// Load Readout Parameters
-		Matrix Readmat;
-		Readmat = read_ascii_matrix(Readmatfile);
-		m_EXmagMax = Readmat.Column(1);
-		m_TR = Readmat.Column(2);
-		m_SS = true;
-
-		LOG << "\nRunning Steady State CEST Model Based upon Listerud, MRM: 37 (1997)\n" << endl;
-
-		LOG << "TR (s): \n" << m_TR.t() << endl;
-
-		LOG << "Excitation B1 values (rad):" << endl << Readmat.Column(1).t() << endl
-				<< "          (Degrees):" << endl << m_EXmagMax.t()* 180 / M_PI << endl;
-
+		m_SS = false;
+		LOG << "Running Original Fabber CEST Method" << endl;
 	}
 
 
@@ -1572,7 +1583,7 @@ void CESTFwdModel::Mz_spectrum_SS(
 		const Matrix& wi,			// Matrix: Pool offsets (radians/s = ppm * 42.58*B0*2*pi)
 		const Matrix& kij,			// Matrix: exchange rates for each pool (see below for in depth description)
 		const Matrix& T12,			// Matrix: T1's (Row 1) and T2's (Row 2)
-		const ColumnVector& w1EX     // Vector: B1-corrected Excitation Flip Angle
+		double w1EX     			// Double: B1-corrected Excitation Flip Angle
 ) const
 {
 
@@ -1647,7 +1658,7 @@ void CESTFwdModel::Mz_spectrum_SS(
 
 	// Find Readout Matrix
 
-	double Tr = m_TR(1);
+	double Tr = m_TR;
 	Tr -= ptvec.Rows(1,ptvec.Nrows()-1).Sum()*t(1);
 	Tr -= ptvec(ptvec.Nrows())*(t(1)-1);
 
@@ -1692,9 +1703,9 @@ void CESTFwdModel::Mz_spectrum_SS(
 
 	for (int i = 0; i < mpool; i++)
 	{
-		C(3*i+1) = sin(w1EX(1));
-		C(3*i+2) = sin(w1EX(1));
-		C(3*i+3) = cos(w1EX(1));
+		C(3*i+1) = sin(w1EX);
+		C(3*i+2) = sin(w1EX);
+		C(3*i+3) = cos(w1EX);
 	}
 
 	// Create M0i Vector
@@ -1721,7 +1732,7 @@ void CESTFwdModel::Mz_spectrum_SS(
 		{
 			// no saturation image - the z water magnetization is just a normal FLASH sequence
 			Matrix Er0 (mpool*3, mpool *3);
-		    Er0 = expm(A*m_TR(1));
+		    Er0 = expm(A*m_TR);
 		    ColumnVector Mz0 (mpool * 3);
 		    Matrix Er0Temp (mpool*3, mpool*3);
 		    Er0Temp = (Eye-Spoil*C*Er0);
@@ -1812,7 +1823,7 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 		const Matrix& wi,			// Matrix: Pool offsets (radians/s = ppm * 42.58*B0*2*pi)
 		const Matrix& kij,			// Matrix: exchange rates for each pool (see below for in depth description)
 		const Matrix& T12,			// Matrix: T1's (Row 1) and T2's (Row 2)
-		const ColumnVector& w1EX     // Vector: B1-corrected Excitation Flip Angle
+		double w1EX     			// Double: B1-corrected Excitation Flip Angle
 ) const
 {
 
@@ -1889,7 +1900,7 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 
 	// Find Readout Matrix
 
-	double Tr = m_TR(1);
+	double Tr = m_TR;
 	Tr -= ptvec.Rows(1,ptvec.Nrows()-1).Sum()*t(1);
 	Tr -= ptvec(ptvec.Nrows())*(t(1)-1);
 
@@ -1934,11 +1945,11 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 
 	for (int i = 0; i < mpool-1; i++)
 	{
-		C(3*i+1) = sin(w1EX(1));
-		C(3*i+2) = sin(w1EX(1));
-		C(3*i+3) = cos(w1EX(1));
+		C(3*i+1) = sin(w1EX);
+		C(3*i+2) = sin(w1EX);
+		C(3*i+3) = cos(w1EX);
 	}
-	C((mpool-1)*3+1) = cos(w1EX(1));
+	C((mpool-1)*3+1) = cos(w1EX);
 
 	// Create M0i Vector
 
@@ -1969,7 +1980,7 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 		if (w1(k) == 0.0)
 		{
 			// no saturation image - the z water magnetization is just a normal FLASH sequence
-			Matrix Er0 = expm(A*m_TR(1));
+			Matrix Er0 = expm(A*m_TR);
 		    ColumnVector Mz0 ((mpool-1)*3+1);
 		    Matrix Er0Temp ((mpool-1)*3+1, (mpool-1)*3+1);
 		    Er0Temp = (Eye-Spoil*C*Er0);
