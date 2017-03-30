@@ -2066,14 +2066,14 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 // Function that will raise a matrix to a power Power
 inline ReturnMatrix CESTFwdModel::mpower(const Matrix& Mat_Base, int Power) const
 {
-	Matrix MExp;
+	Matrix MExp (Mat_Base);
 	if (Power == 2)
 	    MExp = Mat_Base*Mat_Base;
 	else if (Power == 3)
 		MExp = Mat_Base*Mat_Base*Mat_Base;
 	else if (Power == 0)
 	{
-		IdentityMatrix Eye(MExp);
+		IdentityMatrix Eye(MExp.Nrows());
 		return Eye;
 	}
 	else
