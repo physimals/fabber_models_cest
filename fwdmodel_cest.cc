@@ -1989,13 +1989,11 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 		}
 		else
 		{
-
 			Matrix Ems ((mpool-1)*3+1, (mpool-1)*3+1);
 			Matrix Emt ((mpool-1)*3+1, (mpool-1)*3+1);
 
 			for (int jj = 1; jj <= nseg-1; ++jj)
 			{
-
 				Matrix W ((mpool-1)*3+1, (mpool-1)*3+1);
 				W = 0.0;
 				for (int nn = 1; nn <= mpool-1; ++nn)
@@ -2013,6 +2011,17 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 
 				Matrix Em = expm((A+W)*ptvec(jj));
 
+				// Need to determine why the expm function is giving incorrect values around 3 ppm
+				if (k == 6)
+				{
+//					cout << "wvec(" << k << "):\n" << -wvec(k)/42.58/2/M_PI/4.7 << endl;
+//					cout << "W:\n" << W << endl;
+//					cout << "ptvec:\n" << ptvec(jj) << endl;
+//					cout << "Em:\n" << Em << endl;
+//					int xx;
+//					cin >> xx;
+				}
+
 				if (jj == 1)
 				{
 					Emt = Em;
@@ -2027,7 +2036,6 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 				}
 
 			}
-
 
 			// Build the Pulse Train
 			Matrix Emdc = mpower(Emt*iSpoil*Edc,t(k)-1);
@@ -2058,14 +2066,14 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 // Function that will raise a matrix to a power Power
 inline ReturnMatrix CESTFwdModel::mpower(const Matrix& Mat_Base, int Power) const
 {
-	Matrix MExp (Mat_Base);
+	Matrix MExp;
 	if (Power == 2)
 	    MExp = Mat_Base*Mat_Base;
 	else if (Power == 3)
 		MExp = Mat_Base*Mat_Base*Mat_Base;
 	else if (Power == 0)
 	{
-		IdentityMatrix Eye(MExp.Nrows());
+		IdentityMatrix Eye(MExp);
 		return Eye;
 	}
 	else
