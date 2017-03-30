@@ -3,7 +3,7 @@ include ${FSLCONFDIR}/default.mk
 PROJNAME = fabber_cest
 
 USRINCFLAGS = -I${INC_NEWMAT} -I${INC_PROB} -I${INC_BOOST} -I..
-USRLDFLAGS = -L${LIB_NEWMAT} -L${LIB_PROB} -L../fabber_core
+USRLDFLAGS = -L${LIB_NEWMAT} -L${LIB_PROB} -L../fabber_core -LAlglib
 
 LIBS = -lutils -lnewimage -lmiscmaths -lprob -lnewmat -lfslio -lniftiio -lznz -lz -ldl
 
@@ -28,6 +28,6 @@ libfabber_models_cest.a : ${OBJS}
 
 # fabber built from the FSL fabbercore library including the models specifieid in this project
 fabber_cest : fabber_client.o ${OBJS}
-	${CXX} ${CXXFLAGS} ${LDFLAGS} -o $@ $< ${OBJS} -lfabbercore -lfabberexec ${LIBS}
+	${CXX} ${CXXFLAGS} ${LDFLAGS} -o $@ $< ${OBJS} -lfabbercore -lfabberexec -lalglib ${LIBS}
 
 # DO NOT DELETE
