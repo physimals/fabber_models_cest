@@ -595,7 +595,7 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 		{
 			// Only need to fix w1EX if using SS CEST
 			double w1EX = m_EXmagMax * (1+B1off);
-			if (m_lineshape == "none" || M0.Ncols() == 1) // If only water pool, don't use a lineshape
+			if (m_lineshape == "none" || M0.Nrows() == 1) // If only water pool, don't use a lineshape
 				Mz_spectrum_SS(result, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
 			else
 				Mz_spectrum_SS_LineShape(result, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
@@ -1726,6 +1726,9 @@ void CESTFwdModel::Mz_spectrum_SS(
 	 *					Solve for Mz
 	 **********************************************************************/
 
+	// Index for No Saturation image, Used for Z-Spectrum normalization at end of function
+	int iNoSat = 0.0;
+
 	for (int k = 1; k <= nfreq; k++)
 	{
 		if (w1(k) == 0.0)
@@ -1738,6 +1741,8 @@ void CESTFwdModel::Mz_spectrum_SS(
 		    Er0Temp = (Eye-Spoil*C*Er0);
 		    Mz0 = Er0Temp.i()*((Eye-Er0)*M0i);
 		    M(3, k) = Mz0(3);
+
+		    iNoSat = k;
 		}
 		else
 		{
@@ -1808,7 +1813,7 @@ void CESTFwdModel::Mz_spectrum_SS(
 	}
 
 	ColumnVector Mtemp = (M.Row(3)).AsColumn();
-	Mz = abs(Mtemp/Mtemp.Maximum())*M0(1);
+	Mz = abs(Mtemp/Mtemp(iNoSat))*M0(1);
 
 }
 
@@ -1975,6 +1980,9 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 	 *					Solve for Mz
 	 **********************************************************************/
 
+	// Index for No Saturation image, Used for Z-Spectrum normalization at end of function
+	int iNoSat = 0.0;
+
 	for (int k = 1; k <= nfreq; k++)
 	{
 		if (w1(k) == 0.0)
@@ -1986,6 +1994,8 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 		    Er0Temp = (Eye-Spoil*C*Er0);
 		    Mz0 = Er0Temp.i()*((Eye-Er0)*M0i);
 		    M(3, k) = Mz0(3);
+
+		    iNoSat = k;
 		}
 		else
 		{
@@ -2010,17 +2020,6 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 				W((mpool-1)*3+1,(mpool-1)*3+1) = -M_PI*gb(k)*1e-6*w1(k)*pmagvec(jj)*w1(k)*pmagvec(jj);
 
 				Matrix Em = expm((A+W)*ptvec(jj));
-
-				// Need to determine why the expm function is giving incorrect values around 3 ppm
-				if (k == 6)
-				{
-//					cout << "wvec(" << k << "):\n" << -wvec(k)/42.58/2/M_PI/4.7 << endl;
-//					cout << "W:\n" << W << endl;
-//					cout << "ptvec:\n" << ptvec(jj) << endl;
-//					cout << "Em:\n" << Em << endl;
-//					int xx;
-//					cin >> xx;
-				}
 
 				if (jj == 1)
 				{
@@ -2059,7 +2058,7 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 	}
 
 	ColumnVector Mtemp = (M.Row(3)).AsColumn();
-	Mz = abs(Mtemp/Mtemp.Maximum())*M0(1);
+	Mz = abs(Mtemp/Mtemp(iNoSat))*M0(1);
 
 }
 
