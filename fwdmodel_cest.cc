@@ -595,7 +595,7 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 		{
 			// Only need to fix w1EX if using SS CEST
 			double w1EX = m_EXmagMax * (1+B1off);
-			if (m_lineshape == "none")
+			if (m_lineshape == "none" || M0.Ncols() == 1) // If only water pool, don't use a lineshape
 				Mz_spectrum_SS(result, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
 			else
 				Mz_spectrum_SS_LineShape(result, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
