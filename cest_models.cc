@@ -13,7 +13,7 @@ int CALL get_num_models()
     return 1;
 }
 
-const char * CALL get_model_name(int index)
+const char *CALL get_model_name(int index)
 {
     switch (index)
     {

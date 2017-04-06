@@ -16,10 +16,9 @@
 
 #include "fabber_core/fwdmodel.h"
 
-extern "C"
-{
+extern "C" {
 FABBER_CEST_API int CALL get_num_models();
-FABBER_CEST_API const char * CALL get_model_name(int index);
+FABBER_CEST_API const char *CALL get_model_name(int index);
 FABBER_CEST_API NewInstanceFptr CALL get_new_instance_func(const char *name);
 }
 

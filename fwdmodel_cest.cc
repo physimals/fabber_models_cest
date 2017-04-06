@@ -700,7 +700,8 @@ void CESTFwdModel::Initialize(ArgsType &args)
         // (prior) R values
         expoolR = expoolmat.SubMatrix(1, nexpool, 2, 2);
     }
-    else  {
+    else
+    {
         nexpool = 0;
     }
 
@@ -833,15 +834,6 @@ void CESTFwdModel::Initialize(ArgsType &args)
     }
 
       */
-}
-
-vector<string> CESTFwdModel::GetUsage() const
-{
-    vector<string> usage;
-    usage.push_back("\nUsage info for --model=cest:\n");
-    usage.push_back("Undefined\n");
-
-    return usage;
 }
 
 void CESTFwdModel::DumpParameters(const ColumnVector &vec,
