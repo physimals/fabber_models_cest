@@ -75,7 +75,7 @@ include_directories(SYSTEM ${FABBER_INCLUDE_DIR} ${NEWMAT_INCLUDE_DIR} ${FSL_INC
 # Extract GIT revision for versioning
 
 execute_process(COMMAND
-  git describe --match=NeVeRmAtCh --always --abbrev=40 --dirty
+  git describe --dirty
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   OUTPUT_VARIABLE GIT_SHA1
   ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)

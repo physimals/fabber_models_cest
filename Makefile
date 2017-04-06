@@ -16,6 +16,11 @@ OBJS =  fwdmodel_cest.o
 OPTFLAGS = -ggdb
 #OPTFLAGS =
 
+# Pass Git revision details
+GIT_SHA1:=$(shell git describe --dirty)
+GIT_DATE:=$(shell git log -1 --format=%ad --date=local)
+CXXFLAGS += -DGIT_SHA1=\"${GIT_SHA1}\" -DGIT_DATE="\"${GIT_DATE}\""
+
 #
 # Build
 #
