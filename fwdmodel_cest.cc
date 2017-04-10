@@ -598,7 +598,9 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 			if (m_lineshape == "none" || M0.Nrows() == 1) // If only water pool, don't use a lineshape
 				Mz_spectrum_SS(result, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
 			else
+			{
 				Mz_spectrum_SS_LineShape(result, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
+			}
 		}
 		else
 		{
@@ -854,6 +856,8 @@ void CESTFwdModel::Initialize(ArgsType& args)
 
 		LOG << "Excitation Flip Angle (Degrees):\t" << m_EXmagMax << endl << endl;
 		m_EXmagMax *= M_PI/180;
+
+		LOG << "Using Lineshape: " << m_lineshape << endl << endl;
 
 	}
 	else if (m_TR > 0.0 && m_EXmagMax <= 0.0)
@@ -1902,7 +1906,6 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 	A(3,(mpool-1)*3+1) = kij(mpool,1); //NB 'reversal' of indices is correct here
 	A((mpool-1)*3+1,3) = kij(1,mpool); //NB 'reversal' of indices is correct here
 
-
 	// Find Readout Matrix
 
 	double Tr = m_TR;
@@ -2048,7 +2051,6 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 				Emm += mpower(Emt*iSpoil*Edc,jj);
 			}
 
-
 			Matrix Mztemp = Eye - Es*Emdc*Emt*Spoil*Er*C*Spoil;
 
 			M.Column(k) = Mztemp.i() * (Es*Emdc*Emt*Spoil*(Eye-Er)+Es*Emb*Emt*iSpoil*(Eye-Edc)
@@ -2059,7 +2061,6 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 
 	ColumnVector Mtemp = (M.Row(3)).AsColumn();
 	Mz = abs(Mtemp/Mtemp(iNoSat))*M0(1);
-
 }
 
 // Function that will raise a matrix to a power Power
