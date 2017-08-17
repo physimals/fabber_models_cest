@@ -107,8 +107,8 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist& prior,
 				//hardcoded default of zero mean and (relatively) uniformative precision
 				//prior mean of zero set above
 				precisions(place, place) = 1e2;
-				place++;
 			}
+			place++;
 		}
 	}
 
