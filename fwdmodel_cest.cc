@@ -1660,16 +1660,29 @@ void CESTFwdModel::Mz_spectrum_SS(
 		}
 	}
 
-	// Find Readout Matrix
 
+	// Find CEST Saturation Train Pause (for Duty Cycle < 1.0) Matrix & Readout Matrix
+	
 	double Tr = m_TR;
-	Tr -= ptvec.Rows(1,ptvec.Nrows()-1).Sum()*t(1);
-	Tr -= ptvec(ptvec.Nrows())*(t(1)-1);
+	float Tdc = 0;
+	int iNpSeg;
+	if (ptvec.Nrows() == 1)
+	{
+		Tr -= ptvec.Rows(1,ptvec.Nrows()).Sum()*t(1);
+		iNpSeg = 1;
+	}
+	else
+	{
+		Tr -= ptvec.Rows(1,ptvec.Nrows()-1).Sum()*t(1);
+		Tr -= ptvec(ptvec.Nrows())*(t(1)-1);
+
+		// Find CEST Saturation Train Pause (for Duty Cycle < 1.0) Matrix
+		Tdc = ptvec(ptvec.Nrows());
+		iNpSeg = ptvec.Nrows() - 1;
+
+	}
 
 	Matrix Er = expm(A*Tr);
-
-	// Find CEST Saturation Train Pause (for Duty Cycle < 1.0) Matrix
-	float Tdc = ptvec(ptvec.Nrows());
 	Matrix Edc = expm(A*Tdc);
 
 	// Create Spoiling Matrix Using Square matrix with Transverse elements = 0
@@ -1753,7 +1766,7 @@ void CESTFwdModel::Mz_spectrum_SS(
 			Matrix Ems (mpool * 3, mpool * 3);
 			Matrix Emt (mpool * 3, mpool * 3);
 
-			for (int jj = 1; jj <= nseg-1; ++jj)
+			for (int jj = 1; jj <= iNpSeg; ++jj)
 			{
 				Matrix W (mpool * 3, mpool * 3);
 				W = 0.0;
