@@ -9,6 +9,7 @@
 #include "fabber_core/fwdmodel.h"
 #include "fabber_core/inference.h"
 
+
 #include <string>
 using namespace std;
 
@@ -75,10 +76,11 @@ protected:
 
 	// Function to raise a matrix to a power
 	inline NEWMAT::ReturnMatrix mpower(const NEWMAT::Matrix& Mat_Base, int Power) const;
-	inline NEWMAT::ReturnMatrix spower(const NEWMAT::Matrix& Mat_Base, int Power) const;
+	template<typename T> vector<T> spower(const vector<T>& Mat_Base, int Power) const;
 
 	// Function to create a lineshape if an MT pool is present
 	NEWMAT::ReturnMatrix absLineShape(const NEWMAT::ColumnVector& wvec, double T2) const;
+	vector<double> SuperLorentzianLUT(vector<double>& deltac, double T2) const;
 
 	//maths functions
 	void Ainverse(const NEWMAT::Matrix A, NEWMAT::RowVector& Ai) const;

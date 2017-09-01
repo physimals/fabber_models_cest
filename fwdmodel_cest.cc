@@ -14,10 +14,9 @@
 #include <stdexcept>
 #include "newimage/newimageall.h"
 #include "miscmaths/miscprob.h"
-#include "Alglib/stdafx.h"
-#include "Alglib/interpolation.h"
 using namespace NEWIMAGE;
 #include "fabber_core/easylog.h"
+#include "spline_interpolator.h"
 
 FactoryRegistration<FwdModelFactory, CESTFwdModel> CESTFwdModel::registration(
 		"cest");
@@ -2086,6 +2085,8 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 
 	ColumnVector Mtemp = (M.Row(3)).AsColumn();
 	Mz = abs(Mtemp/Mtemp(iNoSat))*M0(1);
+	int xx = write_ascii_matrix("Deltas.txt",wvec);
+	xx =  write_ascii_matrix("Mz.txt", Mz);
 }
 
 // Function that will raise a matrix to a power Power
@@ -2130,110 +2131,136 @@ inline ReturnMatrix CESTFwdModel::mpower(const Matrix& Mat_Base, int Power) cons
 	return MExp;
 }
 
-// Function that will raise each element in a matrix to a power
-inline ReturnMatrix CESTFwdModel::spower(const Matrix& Mat_Base, int Power) const
+// Function that will raise each element in a 1-D Vector to a power
+template<typename T>
+vector<T> CESTFwdModel::spower(const vector<T>& Mat_Base, int Power) const
 {
-	Matrix MExp (Mat_Base);
+	vector<T> MExp (Mat_Base);
 	for (int ii{1}; ii< Power; ++ii)
-		for (int jj{1}; jj <= Mat_Base.Nrows(); ++jj)
-			for (int kk{1}; kk <= Mat_Base.Ncols(); ++kk)
-				MExp(jj,kk) *= Mat_Base(jj,kk);
+		for (int jj{0}; jj < Mat_Base.size(); ++jj)
+			MExp.at(jj) *= Mat_Base.at(jj);
 
 	return MExp;
 }
 
-
-// Helper function for absLineShape to create a linear vector of values
-ReturnMatrix linspace(double a, double b, int n) {
-    ColumnVector array(n);
-    array = 0.0;
-    array(1) = a;
+// Helper function to create a vector version of linspace
+template<typename T>
+void linspace_Vec(vector<T>& array, T a, T b, int n) 
+{
+	int ss = array.size();
+    array.push_back(a);
     double step = (b-a) / (n-1);
 
-    for (int ii {2}; ii <=n; ++ii)
+    for (int ii {1+ss}; ii <n + ss; ++ii)
     {
-
-        array(ii) = array(ii-1) + step;
+        array.push_back(array.at(ii-1) + step);
     }
-    return array;
 }
 
+vector<double> CESTFwdModel::SuperLorentzianLUT(vector<double>& deltac, double T2) const
+{
+	vector<double> u;
+	u.reserve(500);
+	linspace_Vec(u,0.0, 1.0, 500);
 
-/************************************************************************
- *  		Absorption Line Shape Function for the MT pool:
- *  		-Can approximate a Lorentzian, Gaussian, or Super-Lorentzian
- *  		lineshape.
- *  		-The Super-Lorentzian lineshape has a singularity at 0, so it
- *  		is approximated from 1000 Hz inwards.
- *  		-All lineshapes are also multiplied by 1e6 to
- *  		reduce rounding errors
- ************************************************************************/
+	double du = u.at(1)-u.at(0);
+		
+	// vector<double> tmp1 = abs(3*spower(u,2)-1);
+	vector<double> tmp1 = spower(u,2);
+	transform(tmp1.begin(), tmp1.end(), tmp1.begin(), [](double d) -> double {return 1/abs(d*3-1);} );
+	
+	vector<double> gc;
+	gc.reserve(deltac.size());
+	for (int ii{0}; ii < deltac.size()/2; ++ii)
+	{
+		gc.push_back(0);
+		for (int jj{0}; jj < u.size(); ++jj)
+		{
+			gc.at(ii) += (1e6*sqrt(2/M_PI)*T2*tmp1.at(jj)*exp(-2*T2*T2*tmp1.at(jj)*tmp1.at(jj)*deltac.at(ii)*deltac.at(ii)));
+		}
+		gc.at(ii) *= du;
+	}
+	
+	gc.insert(gc.end(),gc.rbegin(),gc.rend());
+
+	return gc;
+}
+
+//***************************************************************************
+//*  		Absorption Line Shape Function for the MT pool:				 	*
+//*  		-Can approximate a Lorentzian, Gaussian, or Super-Lorentzian 	*
+//*  		lineshape.													 	*
+//*  		-The Super-Lorentzian lineshape has a singularity at 0, so it	*
+//*  		is approximated from 1000 Hz inwards.							*
+//*  		-All lineshapes are also multiplied by 1e6 to					*
+//*  		reduce rounding errors											*
+//***************************************************************************
 ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& wvec, double T2) const
 {
 	if (m_lineshape == "Lorentzian" || m_lineshape == "lorentzian")
 	{
-
-		ColumnVector tmp = (1+spower(wvec*T2,2));
-		for (int ii{1}; ii <=wvec.Nrows(); ++ii)
+		ColumnVector tmp = (1+wvec*wvec*T2*T2); 
+		for (int ii{1}; ii <=wvec.Nrows(); ++ii) 
 		{
-			tmp.Row(ii) = 1/tmp(ii);
+			tmp.Row(ii) = 1/tmp(ii); 
 		}
-		tmp = (T2/M_PI)*tmp*1e6;
-		return tmp;
+		tmp *= (T2/M_PI)*1e6;
+		return tmp;	
 	}
 	else if (m_lineshape == "SuperLorentzian" || m_lineshape == "superlorentzian" || m_lineshape == "Superlorentzian")
 	{
-		int cutoff = 1000*2*M_PI;
-		ColumnVector u = linspace(0, 1, 500);
-		ColumnVector deltac (2e3);
-		deltac = 0.0;
+		double cutoff = 1000*2*M_PI;
 
-		deltac.SubMatrix(1,1000,1,1) = linspace(-1e5*2*M_PI,-cutoff,1e3);
-		deltac.SubMatrix(1001,2e3,1,1) = linspace(cutoff,1e5*2*M_PI,1e3);
+		vector<double> deltac;
+		deltac.reserve(2e3);
+		linspace_Vec(deltac,-1e5*2*M_PI,-cutoff,1e3);
+		linspace_Vec(deltac,cutoff,1e5*2*M_PI,1e3);
 
-		double du = u(2)-u(1);
-		Matrix f(2e3,u.Nrows());
+		// string filename = "SL_LUT.txt";
+		// ifstream fs(filename.c_str());
+		// if (!m_isLUTLoaded)
+		// {
+		// 	if (!fs)
+		// 	{
+			
+		// 	}
+		// 	m_isLUTLoaded = true;
+		// }
+		// std::vector<int> aa;
+		// linspace_Vec(aa,1000,30000,29001);
+		// int bb = static_cast<int>(trunc(T2*1e8));
+		// vector<int>::iterator it = find(aa.begin(),aa.end(),30000);
+		// int T2_index = it - aa.begin();
 
-		ColumnVector tmp1 = abs(3*spower(u,2)-1);
-		for (int ii{1}; ii <=u.Nrows(); ++ii)
+		vector<double> gc = SuperLorentzianLUT(deltac,T2);
+
+		NaturalSplineInterpolator interp(deltac,gc);
+
+		ofstream myfile;
+		myfile.open ("g_SL.txt");
+		for (int ii{1}; ii <=wvec.Nrows(); ++ii)
 		{
-			f.Column(ii) = 1e6*sqrt(2/M_PI)*T2*1/tmp1(ii)*exp(-2*spower(1/tmp1(ii)*deltac*T2,2));
+			myfile << interp(wvec(ii)) << "\n";
 		}
-
-		using namespace alglib;
-		real_1d_array gg;
-		gg.setlength(2e3);
-		real_1d_array gc;
-		gc.setlength(2e3);
-		for (int ii{1}; ii <= deltac.Nrows(); ++ii)
-		{
-			gc(ii-1) = f.Row(ii).Sum()*du;
-			gg(ii-1) = deltac(ii);
-		}
-
-		spline1dinterpolant s;
-		ae_int_t natural_bound_type = 2;
-		spline1dbuildcubic(gg, gc, s);
+		myfile.close();
 
 		ColumnVector g(wvec);
-		g = 0.0;
-		for (int ii{1}; ii <= wvec.Nrows(); ++ii)
-		{
-			g(ii) = spline1dcalc(s, wvec(ii));
-		}
-
+		for (int ii{1}; ii <= wvec.Nrows(); ++ii) 
+		{ 
+		  g(ii) = interp(wvec(ii)); 
+		} 
 		return g;
 	}
 	else if (m_lineshape == "Gaussian" || m_lineshape == "gaussian")
 	{
-		ColumnVector tmp = (T2/sqrt(2*M_PI))*exp(-spower(wvec*T2,2)/2)*1e6;
-		return tmp;
+		ColumnVector g =  (T2/sqrt(2*M_PI))*exp(-wvec*wvec*T2*T2/2)*1e6;
+		return g;
 	}
 	else
 	{
 		cout << "CEST Lineshape: No Known Lineshape Selected" << endl;
-		ColumnVector tmp(wvec);
-		tmp = 0.0;
-		return tmp;
+		ColumnVector g(wvec);
+		g = 0.0;
+		return g;
 	}
 }

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.7)
 
 set(MODELS_NAME cest)
-set(MODELS_SRC fwdmodel_cest.cc)
+set(MODELS_SRC fwdmodel_cest.cc spline_interpolator.cc)
 
 add_library(fabber_models_${MODELS_NAME} SHARED ${MODELS_SRC} ${MODELS_NAME}_models.cc)
 add_executable(fabber_${MODELS_NAME} ${MODELS_SRC} fabber_client.cc)
@@ -69,12 +69,8 @@ Message("-- Using newimage: ${NEWIMAGE_LIBRARY}")
 Message("-- Using prob: ${PROB_LIBRARY}")
 Message("-- Using zlib: ${Z_LIBRARY}")
 
-include_directories ("${PROJECT_SOURCE_DIR}/Alglib")
-add_subdirectory (Alglib)
-set (ALGLIB ${ALGLIB} Alglib)
-
-target_link_libraries(fabber_models_${MODELS_NAME} ${LIBS} ${ALGLIB})
-target_link_libraries(fabber_${MODELS_NAME} ${LIBS} ${ALGLIB})
+target_link_libraries(fabber_models_${MODELS_NAME} ${LIBS})
+target_link_libraries(fabber_${MODELS_NAME} ${LIBS})
 
 include_directories(SYSTEM ${FABBER_INCLUDE_DIR} ${NEWMAT_INCLUDE_DIR} ${FSL_INCLUDE_DIR} ${FSL_EXT_INCLUDE_DIR} ${FSL_EXT_INCLUDE_DIR}/libprob ${BOOST_INCLUDE_DIR})
 
