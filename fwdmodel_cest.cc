@@ -2232,17 +2232,17 @@ ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& wvec, double T2) con
 		// vector<int>::iterator it = find(aa.begin(),aa.end(),30000);
 		// int T2_index = it - aa.begin();
 
+		// ofstream myfile;
+		// myfile.open ("g_SL.txt");
+		// for (int ii{1}; ii <=wvec.Nrows(); ++ii)
+		// {
+		// 	myfile << interp(wvec(ii)) << "\n";
+		// }
+		// myfile.close();
+
 		vector<double> gc = SuperLorentzianLUT(deltac,T2);
 
 		NaturalSplineInterpolator interp(deltac,gc);
-
-		ofstream myfile;
-		myfile.open ("g_SL.txt");
-		for (int ii{1}; ii <=wvec.Nrows(); ++ii)
-		{
-			myfile << interp(wvec(ii)) << "\n";
-		}
-		myfile.close();
 
 		ColumnVector g(wvec);
 		for (int ii{1}; ii <= wvec.Nrows(); ++ii) 
