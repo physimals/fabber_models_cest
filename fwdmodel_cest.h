@@ -77,10 +77,11 @@ protected:
 	// Function to raise a matrix to a power
 	inline NEWMAT::ReturnMatrix mpower(const NEWMAT::Matrix& Mat_Base, int Power) const;
 	template<typename T> vector<T> spower(const vector<T>& Mat_Base, int Power) const;
+	NEWMAT::ReturnMatrix spower_Mat(const NEWMAT::Matrix&, int) const;
 
 	// Function to create a lineshape if an MT pool is present
 	NEWMAT::ReturnMatrix absLineShape(const NEWMAT::ColumnVector& wvec, double T2) const;
-	vector<double> SuperLorentzianLUT(vector<double>& deltac, double T2) const;
+	vector<double> SuperLorentzianGenerator(vector<double>& deltac, double T2) const;
 
 	//maths functions
 	void Ainverse(const NEWMAT::Matrix A, NEWMAT::RowVector& Ai) const;

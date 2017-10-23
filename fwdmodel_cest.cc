@@ -2085,8 +2085,8 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 
 	ColumnVector Mtemp = (M.Row(3)).AsColumn();
 	Mz = abs(Mtemp/Mtemp(iNoSat))*M0(1);
-	int xx = write_ascii_matrix("Deltas.txt",wvec);
-	xx =  write_ascii_matrix("Mz.txt", Mz);
+	// int xx = write_ascii_matrix("Deltas.txt",wvec);
+	// xx =  write_ascii_matrix("Mz.txt", Mz);
 }
 
 // Function that will raise a matrix to a power Power
@@ -2143,6 +2143,24 @@ vector<T> CESTFwdModel::spower(const vector<T>& Mat_Base, int Power) const
 	return MExp;
 }
 
+ReturnMatrix CESTFwdModel::spower_Mat(const Matrix& Mat_Base, int Power) const
+{
+  Matrix MExp (Mat_Base);
+  for (int ii{1}; ii< Power; ++ii)
+  {
+	for (int jj{1}; jj <= Mat_Base.Nrows(); ++jj)
+	{
+		for (int kk{1}; kk <= Mat_Base.Ncols(); ++kk)
+		{
+			MExp(jj,kk) *= Mat_Base(jj,kk);
+		}
+	}
+  }
+	
+ 
+  return MExp;
+}
+
 // Helper function to create a vector version of linspace
 template<typename T>
 void linspace_Vec(vector<T>& array, T a, T b, int n) 
@@ -2157,7 +2175,7 @@ void linspace_Vec(vector<T>& array, T a, T b, int n)
     }
 }
 
-vector<double> CESTFwdModel::SuperLorentzianLUT(vector<double>& deltac, double T2) const
+vector<double> CESTFwdModel::SuperLorentzianGenerator(vector<double>& deltac, double T2) const
 {
 	vector<double> u;
 	u.reserve(500);
@@ -2199,7 +2217,8 @@ ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& wvec, double T2) con
 {
 	if (m_lineshape == "Lorentzian" || m_lineshape == "lorentzian")
 	{
-		ColumnVector tmp = (1+wvec*wvec*T2*T2); 
+		ColumnVector tmp = (wvec); 
+		tmp = 1+spower_Mat(wvec,2)*T2*T2; 
 		for (int ii{1}; ii <=wvec.Nrows(); ++ii) 
 		{
 			tmp.Row(ii) = 1/tmp(ii); 
@@ -2209,6 +2228,25 @@ ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& wvec, double T2) con
 	}
 	else if (m_lineshape == "SuperLorentzian" || m_lineshape == "superlorentzian" || m_lineshape == "Superlorentzian")
 	{
+
+		
+		if (wvec.MinimumAbsoluteValue() > 750*2*M_PI) // set a little below 1000 Hz in case B0 inhomogeneity causes issues
+		{
+			vector<double> deltas;
+			for (int ii{1}; ii <= wvec.Nrows(); ++ii)
+			{
+				deltas.push_back(wvec(ii));
+			}
+			vector<double> gc = SuperLorentzianGenerator(deltas,T2);
+
+			ColumnVector g(wvec);
+			for (int ii{1}; ii <= wvec.Nrows(); ++ii)
+			{
+				g(ii) = gc.at(ii-1);
+			}
+			return g;
+		}
+
 		double cutoff = 1000*2*M_PI;
 
 		vector<double> deltac;
@@ -2216,31 +2254,7 @@ ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& wvec, double T2) con
 		linspace_Vec(deltac,-1e5*2*M_PI,-cutoff,1e3);
 		linspace_Vec(deltac,cutoff,1e5*2*M_PI,1e3);
 
-		// string filename = "SL_LUT.txt";
-		// ifstream fs(filename.c_str());
-		// if (!m_isLUTLoaded)
-		// {
-		// 	if (!fs)
-		// 	{
-			
-		// 	}
-		// 	m_isLUTLoaded = true;
-		// }
-		// std::vector<int> aa;
-		// linspace_Vec(aa,1000,30000,29001);
-		// int bb = static_cast<int>(trunc(T2*1e8));
-		// vector<int>::iterator it = find(aa.begin(),aa.end(),30000);
-		// int T2_index = it - aa.begin();
-
-		// ofstream myfile;
-		// myfile.open ("g_SL.txt");
-		// for (int ii{1}; ii <=wvec.Nrows(); ++ii)
-		// {
-		// 	myfile << interp(wvec(ii)) << "\n";
-		// }
-		// myfile.close();
-
-		vector<double> gc = SuperLorentzianLUT(deltac,T2);
+		vector<double> gc = SuperLorentzianGenerator(deltac,T2);
 
 		NaturalSplineInterpolator interp(deltac,gc);
 
