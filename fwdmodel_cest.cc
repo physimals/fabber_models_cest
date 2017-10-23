@@ -2183,9 +2183,16 @@ vector<double> CESTFwdModel::SuperLorentzianGenerator(vector<double>& deltac, do
 
 	double du = u.at(1)-u.at(0);
 		
-	// vector<double> tmp1 = abs(3*spower(u,2)-1);
-	vector<double> tmp1 = spower(u,2);
-	transform(tmp1.begin(), tmp1.end(), tmp1.begin(), [](double d) -> double {return 1/abs(d*3-1);} );
+	// u^2
+	vector<double> u2 = spower(u,2);
+	
+	// pre-c++11 doesn't support this method, switching to for loop below
+	// transform(u2.begin(), u2.end(), u2.begin(), [](double d) -> double {return 1/abs(d*3-1);} );
+
+	for (vector<double>::iterator jj = u2.begin(); jj != u2.end(); ++jj)
+	{
+		*jj = 1/(abs(*jj*3-1));
+	}
 	
 	vector<double> gc;
 	gc.reserve(deltac.size());
@@ -2194,7 +2201,7 @@ vector<double> CESTFwdModel::SuperLorentzianGenerator(vector<double>& deltac, do
 		gc.push_back(0);
 		for (int jj{0}; jj < u.size(); ++jj)
 		{
-			gc.at(ii) += (1e6*sqrt(2/M_PI)*T2*tmp1.at(jj)*exp(-2*T2*T2*tmp1.at(jj)*tmp1.at(jj)*deltac.at(ii)*deltac.at(ii)));
+			gc.at(ii) += (1e6*sqrt(2/M_PI)*T2*u2.at(jj)*exp(-2*T2*T2*u2.at(jj)*u2.at(jj)*deltac.at(ii)*deltac.at(ii)));
 		}
 		gc.at(ii) *= du;
 	}
