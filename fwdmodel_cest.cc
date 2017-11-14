@@ -339,7 +339,7 @@ void CESTFwdModel::EvaluateMTR(const ColumnVector &params, ColumnVector &result,
     // We evaluate the spectrum at a fixed PPM from the poolmat file, unless
     // the value is 0 in which case we use 50ppm (works for semisolid pool)
     double ppm_eval = 50;
-    if (poolppm(pool_num-1) > 0) {
+    if (poolppm(pool_num-1) != 0) {
         ppm_eval = poolppm(pool_num-1);
     }
     //LOG << "Evaluating at " << ppm_eval << ", " << (ppm_eval* wlam / 1e6) << endl;
