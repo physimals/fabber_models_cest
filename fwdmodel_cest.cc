@@ -280,7 +280,142 @@ void CESTFwdModel::InitParams(MVNDist &posterior) const
     posterior.SetPrecisions(precisions);
 }
 
-void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result) const
+void CESTFwdModel::GetOutputs(std::vector<std::string> &outputs) const
+{
+    for (int p=1; p<npool; p++) {
+        char pool_char = char(int('a') + p);
+        outputs.push_back(string("mtr_") + pool_char);
+    }
+}
+    
+double lin_interp(const ColumnVector &x, const ColumnVector &y, double pos)
+{
+    // Quick-and-dumb linear interpolation. Assume x, pos > 0
+    // and function starts at 0, 0
+    double prev_val = 0;
+    double prev_x = 0;
+    for (int i = 1; i <= x.Nrows(); i++)
+    {
+        if (pos < x(i)) {
+            double frac = (pos - prev_x) / (x(i) - prev_x);
+            return prev_val + frac * (y(i) - prev_val);
+        }
+        prev_val = y(i);
+        prev_x = x(i);
+    }
+
+    // pos beyond last x value - just return last y value
+    return y(y.Nrows());
+}
+
+void CESTFwdModel::EvaluateModel(const ColumnVector &params, ColumnVector &result, const std::string &key) const
+{
+    if (key == "") {
+        Evaluate(params, result);
+    }
+    else {
+        // Debugging
+        //Evaluate(params, result);
+        //LOG << "normal: " << result.t();
+        // Outputting  MTR - need to know pool number which is encoded by the letter
+        // at the end of the key (a=water, b=pool 2, etc). This will always be > 1
+        int pool_num = 1 + int(key[key.length()-1]) - int('a');
+        assert(pool_num > 1);
+        EvaluateMTR(params, result, pool_num);
+    }
+}
+
+void CESTFwdModel::EvaluateMTR(const ColumnVector &params, ColumnVector &result, 
+                               int pool_num) const
+{
+    assert(pool_num > 1);
+    //LOG << "Outputting " << key << " for pool " << pool_num << endl;
+    ColumnVector water_only, with_pool;
+    Evaluate(params, water_only, 1);
+    Evaluate(params, with_pool, pool_num);
+    //LOG << "freq: " << wvec.t();
+    //LOG << "water only: " << water_only.t();
+    //LOG << "With pool: " << with_pool.t();
+    // We evaluate the spectrum at a fixed PPM from the poolmat file, unless
+    // the value is 0 in which case we use 50ppm (works for semisolid pool)
+    double ppm_eval = 50;
+    if (poolppm(pool_num-1) > 0) {
+        ppm_eval = poolppm(pool_num-1);
+    }
+    //LOG << "Evaluating at " << ppm_eval << ", " << (ppm_eval* wlam / 1e6) << endl;
+    // Evaluate at fixed PPM by linear interpolation. Note freq transformation
+    // same as transformation applied to wvec
+    double water = lin_interp(wvec, water_only, ppm_eval* wlam / 1e6);
+    double pool = lin_interp(wvec, with_pool, ppm_eval* wlam / 1e6);
+    //LOG << "water " << water << endl;
+    //LOG << "pool " << pool << endl;
+    //LOG << "frac " << pool/water << endl;
+    result.ReSize(1);
+    result(1) = 100*(water - pool)/water;
+    //LOG << "res " << result.t() << endl;
+}
+
+/**
+ * To evaluate only with single pool or 2-pool, need to restrict matrices to the relevant pools
+ *
+ * This is used in order to calculate MTR in the final output stage
+ *
+ * wvec - no change, this is vector of size nsamp
+ * w1   - no change, this is vector of size nsamp
+ * tsatvec - no change, this is vector of size nsamp
+ * M0 - need to restrict to rows 1 and poolnum
+ * wimat - need to restric to rows 1 and poolnum
+ * kij - need to restict to rows/columns 1 and poolnum
+ * T12 - need to restrict to rows 1 and poolnum
+ */   
+void CESTFwdModel::RestrictPools(ColumnVector &M0, Matrix &wimat, Matrix &kij, Matrix &T12, int pool) const
+{
+    if (pool == 1) { 
+        // Restrict solution to water pool only
+        ColumnVector M0_res(1);
+        M0_res(1) = M0(1);
+        M0 = M0_res;
+
+        Matrix wimat_res(1, wimat.Ncols());
+        wimat_res.Row(1) = wimat.Row(1);
+        wimat = wimat_res;
+        
+        Matrix kij_res(1, 1);
+        kij_res(1, 1) = kij(1, 1);
+        kij = kij_res;
+        
+        Matrix T12_res(2, 1);
+        T12_res.Column(1) = T12.Column(1);
+        T12 = T12_res;
+    }
+    else if (pool > 1) { 
+        // Restrict solution to water pool + other specified pool
+        ColumnVector M0_res(2);
+        M0_res(1) = M0(1);
+        M0_res(2) = M0(pool);
+        M0 = M0_res;
+
+        Matrix wimat_res(2, wimat.Ncols());
+        wimat_res.Row(1) = wimat.Row(1);
+        wimat_res.Row(2) = wimat.Row(pool);
+        wimat = wimat_res;
+        
+        Matrix kij_res(2, 2);
+        kij_res(1, 1) = kij(1, 1);
+        kij_res(1, 2) = kij(1, pool);
+        kij_res(2, 1) = kij(pool, 1);
+        kij_res(2, 2) = kij(pool, pool);
+        kij = kij_res;
+        
+        Matrix T12_res(2, 2);
+        T12_res.Column(1) = T12.Column(1);
+        T12_res.Column(2) = T12.Column(pool);
+        T12 = T12_res;
+    }
+}
+
+void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, 
+                            int restrict_pool) const
 {
     // ensure that values are reasonable
     // negative check
@@ -555,6 +690,11 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result) co
 	   thisresult = PV_GM*GM_result + PV_WM*WM_result + PV_CSF*CSF_result;
 	 }
    */
+
+    if (restrict_pool > 0) { 
+        // We are restriction the solution to the water pool + possibly one other pool
+        RestrictPools(M0, wimat, kij, T12, restrict_pool);
+    }
 
     if (lorentz)
     {

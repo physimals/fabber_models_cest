@@ -18,8 +18,9 @@ public:
 
     // Virtual function overrides
     virtual void Initialize(ArgsType &args);
-    virtual void Evaluate(const NEWMAT::ColumnVector &params,
-        NEWMAT::ColumnVector &result) const;
+    void GetOutputs(std::vector<std::string> &outputs) const;
+    void EvaluateModel(const NEWMAT::ColumnVector &params, NEWMAT::ColumnVector &result, const std::string &key) const;
+
     virtual string ModelVersion() const;
     virtual void GetOptions(std::vector<OptionSpec> &opts) const;
     virtual std::string GetDescription() const;
@@ -39,6 +40,11 @@ public:
 
 protected:
     //specific functions
+
+    void EvaluateMTR(const NEWMAT::ColumnVector &params, NEWMAT::ColumnVector &result, int pool_num) const;
+    void RestrictPools(NEWMAT::ColumnVector &M0, NEWMAT::Matrix &wimat, NEWMAT::Matrix &kij, NEWMAT::Matrix &T12, int pool) const;
+    void Evaluate(const NEWMAT::ColumnVector &params, NEWMAT::ColumnVector &result, 
+                  int restrict_pool=-1) const;
     void Mz_spectrum(NEWMAT::ColumnVector &Mz, const NEWMAT::ColumnVector &wvec, const NEWMAT::ColumnVector &w1, const NEWMAT::ColumnVector &t, const NEWMAT::ColumnVector &M0, const NEWMAT::Matrix &wi, const NEWMAT::Matrix &kij, const NEWMAT::Matrix &T12) const;
     NEWMAT::ReturnMatrix Mz_spectrum_lorentz(const NEWMAT::ColumnVector &wvec, const NEWMAT::ColumnVector &w1, const NEWMAT::ColumnVector &t, const NEWMAT::ColumnVector &M0, const NEWMAT::Matrix &wi, const NEWMAT::Matrix &kij, const NEWMAT::Matrix &T12) const;
 
