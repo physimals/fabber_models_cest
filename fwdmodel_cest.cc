@@ -712,9 +712,9 @@ void CESTFwdModel::Initialize(ArgsType& args)
 	float wdefault = 42.58e6 * 3 * 2 * M_PI; //the default centre freq. (3T)
 	// Should be negative to reflect conversion between ppm and Hz
 	if (poolmat(1, 1) > 0)
-		wlam = -poolmat(1, 1) * 2 * M_PI;
+		wlam = poolmat(1, 1) * 2 * M_PI;
 	else
-		wlam = -wdefault;
+		wlam = wdefault;
 	// ppm offsets
 	poolppm = poolmat.SubMatrix(2, npool, 1, 1);
 	// exchange rate
@@ -781,10 +781,14 @@ void CESTFwdModel::Initialize(ArgsType& args)
 	//ppm_apt = -3.5;
 	//ppm_mt = -2.41;
 	// setup vectors that specify details of each data point
+	
 	// sampling frequency
-	wvec = dataspec.Column(1) * wlam / 1e6;
+	// wlam is negative because +Hz -> -ppm (3.5 ppm is downfield of water, whereas -2.5 ppm is upfield)
+	wvec = dataspec.Column(1) * -wlam / 1e6;  
+	
 	// B1 value, convert to radians equivalent
 	w1vec = dataspec.Column(2) * 42.58e6 * 2 * M_PI;
+	
 	// Saturation time
 	tsatvec = dataspec.Column(3);
 
