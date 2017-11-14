@@ -2264,8 +2264,19 @@ ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& wvec, double T2) con
 		deltac.reserve(2e3);
 		linspace_Vec(deltac,-1e5*2*M_PI,-cutoff,1e3);
 		linspace_Vec(deltac,cutoff,1e5*2*M_PI,1e3);
-
-		vector<double> gc = SuperLorentzianGenerator(deltac,T2);
+		
+		vector<double> gc;
+		gc.reserve(deltac.size());
+		if (m_T2m == T2)
+		{
+			gc = m_gc;
+		}
+		else
+		{
+			gc = SuperLorentzianGenerator(deltac,T2);
+			m_T2m = T2;
+			m_gc = gc;
+		}
 
 		NaturalSplineInterpolator interp(deltac,gc);
 

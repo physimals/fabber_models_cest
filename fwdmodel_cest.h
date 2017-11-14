@@ -149,6 +149,9 @@ protected:
 
 	string m_lineshape; // String that describes which lineshape to use
 
+	// Variables used to increase processing speed of SuperLorentzian Lineshape
+	mutable double m_T2m = -1e5; 
+	mutable std::vector<double> m_gc; 
 
 	// processing flags
 	mutable bool fastgrad; //use a fast approximation to the expm because we are caculating the gradient
