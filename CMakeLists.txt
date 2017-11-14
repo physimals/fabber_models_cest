@@ -14,7 +14,7 @@ if(APPLE)
 endif(APPLE)
 
 find_path(FABBER_INCLUDE_DIR fabber_core/fwdmodel.h
-            HINTS $ENV{FSLDIR}/include .. REQUIRED)
+            HINTS $ENV{FSLDEVDIR}/include $ENV{FSLDIR}/include .. REQUIRED)
 find_path(NEWMAT_INCLUDE_DIR newmat.h
             HINTS $ENV{FSLDIR}/extras/include/newmat REQUIRED)
 find_path(FSL_INCLUDE_DIR newimage/newimage.h
@@ -30,9 +30,9 @@ Message("-- FSL headers in ${FSL_INCLUDE_DIR} ${NEWMAT_INCLUDE_DIR} ${FSL_EXT_IN
 Message("-- Fabber headers in ${FABBER_INCLUDE_DIR}/fabber_core")
 
 find_library(FABBER_LIBRARY NAMES fabbercore libfabbercore
-             HINTS $ENV{FSLDIR}/lib ../fabber_core/Release ../fabber_core/Debug REQUIRED )
+             HINTS $ENV{FSLDEVDIR}/lib $ENV{FSLDIR}/lib ../fabber_core/Release ../fabber_core/Debug REQUIRED )
 find_library(FABBER_EXEC_LIBRARY NAMES fabberexec libfabberexec
-             HINTS $ENV{FSLDIR}/lib ../fabber_core/Release ../fabber_core/Debug REQUIRED )
+             HINTS $ENV{FSLDEVDIR}/lib $ENV{FSLDIR}/lib ../fabber_core/Release ../fabber_core/Debug REQUIRED )
 find_library(NEWMAT_LIBRARY NAMES newmat libnewmat
              HINTS $ENV{FSLDIR}/extras/lib REQUIRED )
 find_library(MISCMATHS_LIBRARY NAMES miscmaths libmiscmaths

@@ -16,7 +16,7 @@ fi
 
 if [ -z $2 ]
 then
-  if [ -z $FABBERDIR ]
+  if [ -z $FSLDEVDIR ]
   then
     if [ -z $FSLDIR ]
     then
@@ -25,7 +25,7 @@ then
       PREFIX=$FSLDIR
     fi
   else
-    PREFIX=$FABBERDIR
+    PREFIX=$FSLDEVDIR
   fi
 else
   PREFIX=$2
