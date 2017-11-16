@@ -7,6 +7,7 @@
 /*  CCOPYRIGHT */
 
 #include "fwdmodel_cest.h"
+#include "spline_interpolator.h"
 
 #include <iostream>
 #include <newmatio.h>
@@ -16,7 +17,6 @@
 #include "miscmaths/miscprob.h"
 using namespace NEWIMAGE;
 #include "fabber_core/easylog.h"
-#include "spline_interpolator.h"
 
 FactoryRegistration<FwdModelFactory, CESTFwdModel> CESTFwdModel::registration(
 		"cest");
@@ -710,11 +710,12 @@ void CESTFwdModel::Initialize(ArgsType& args)
 	}
 	// water centre
 	float wdefault = 42.58e6 * 3 * 2 * M_PI; //the default centre freq. (3T)
+	
 	// Should be negative to reflect conversion between ppm and Hz
 	if (poolmat(1, 1) > 0)
-		wlam = poolmat(1, 1) * 2 * M_PI;
+		wlam = -poolmat(1, 1) * 2 * M_PI;
 	else
-		wlam = wdefault;
+		wlam = -wdefault;
 	// ppm offsets
 	poolppm = poolmat.SubMatrix(2, npool, 1, 1);
 	// exchange rate
@@ -784,7 +785,7 @@ void CESTFwdModel::Initialize(ArgsType& args)
 	
 	// sampling frequency
 	// wlam is negative because +Hz -> -ppm (3.5 ppm is downfield of water, whereas -2.5 ppm is upfield)
-	wvec = dataspec.Column(1) * -wlam / 1e6;  
+	wvec = dataspec.Column(1) * wlam / 1e6;  
 	
 	// B1 value, convert to radians equivalent
 	w1vec = dataspec.Column(2) * 42.58e6 * 2 * M_PI;
@@ -793,7 +794,7 @@ void CESTFwdModel::Initialize(ArgsType& args)
 	tsatvec = dataspec.Column(3);
 
 	LOG << " Model parameters: " << endl;
-	LOG << " Water - freq. (MHz) = " << wlam / 2 / M_PI << endl;
+	LOG << " Water - freq. (MHz) = " << -wlam / 2 / M_PI << endl;
 	LOG << "         T1    (s)   = " << T12master(1, 1) << endl;
 	LOG << "         T2    (s)   = " << T12master(2, 1) << endl;
 	;
@@ -2241,22 +2242,22 @@ ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& wvec, double T2) con
 	{
 
 		
-		if (wvec.MinimumAbsoluteValue() > 750*2*M_PI) // set a little below 1000 Hz in case B0 inhomogeneity causes issues
-		{
-			vector<double> deltas;
-			for (int ii{1}; ii <= wvec.Nrows(); ++ii)
-			{
-				deltas.push_back(wvec(ii));
-			}
-			vector<double> gc = SuperLorentzianGenerator(deltas,T2);
+		// if (wvec.MinimumAbsoluteValue() > 750*2*M_PI) // set a little below 1000 Hz in case B0 inhomogeneity causes issues
+		// {
+		// 	vector<double> deltas;
+		// 	for (int ii{1}; ii <= wvec.Nrows(); ++ii)
+		// 	{
+		// 		deltas.push_back(wvec(ii));
+		// 	}
+		// 	vector<double> gc = SuperLorentzianGenerator(deltas,T2);
 
-			ColumnVector g(wvec);
-			for (int ii{1}; ii <= wvec.Nrows(); ++ii)
-			{
-				g(ii) = gc.at(ii-1);
-			}
-			return g;
-		}
+		// 	ColumnVector g(wvec);
+		// 	for (int ii{1}; ii <= wvec.Nrows(); ++ii)
+		// 	{
+		// 		g(ii) = gc.at(ii-1);
+		// 	}
+		// 	return g;
+		// }
 
 		double cutoff = 1000*2*M_PI;
 
