@@ -52,7 +52,8 @@ double SplineInterpolator::operator()(double x) const
 
 /**
  * Based on code found on StackOverflow, which was in turn derived from an algorithm on Wikipedia
- * How trustworthy is that?
+ * How trustworthy is that? Not very as it turned out, since the original code had a memory bug (fixed 
+ * in below)
  *
  * https://stackoverflow.com/questions/1204553/are-there-any-good-libraries-for-solving-cubic-splines-in-c
  */
@@ -76,8 +77,11 @@ NaturalSplineInterpolator::NaturalSplineInterpolator(vector<double> &x, vector<d
         h.push_back(x[i+1]-x[i]);
 
     vector<double> alpha;
-    for(int i = 0; i < n; ++i)
+    alpha.push_back(0); // This element is never used but alpha must have size n
+    for(int i = 1; i < n; ++i)
+    {
         alpha.push_back( 3*(a[i+1]-a[i])/h[i] - 3*(a[i]-a[i-1])/h[i-1]  );
+    }
 
     vector<double> c(n+1);
     vector<double> l(n+1);
