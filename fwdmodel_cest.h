@@ -45,7 +45,7 @@ public:
 protected:
     // specific functions
 
-    void EvaluateMTR(
+    void EvaluateCestRstar(
         const NEWMAT::ColumnVector &params, NEWMAT::ColumnVector &result, int pool_num) const;
     void RestrictPools(NEWMAT::ColumnVector &M0, NEWMAT::Matrix &wimat, NEWMAT::Matrix &kij,
         NEWMAT::Matrix &T12, int pool) const;

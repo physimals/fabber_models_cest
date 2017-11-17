@@ -251,7 +251,7 @@ void CESTFwdModel::GetOutputs(std::vector<std::string> &outputs) const
     for (int p = 1; p < npool; p++)
     {
         char pool_char = char(int('a') + p);
-        outputs.push_back(string("mtr_") + pool_char);
+        outputs.push_back(string("cest_rstar_") + pool_char);
     }
 }
 
@@ -285,27 +285,38 @@ void CESTFwdModel::EvaluateModel(
     }
     else
     {
-        // Debugging
-        // Evaluate(params, result);
-        // LOG << "normal: " << result.t();
-        // Outputting  MTR - need to know pool number which is encoded by the letter
+        // Outputting  CEST R* - need to know pool number which is encoded by the letter
         // at the end of the key (a=water, b=pool 2, etc). This will always be > 1
         int pool_num = 1 + int(key[key.length() - 1]) - int('a');
         assert(pool_num > 1);
-        EvaluateMTR(params, result, pool_num);
+        EvaluateCestRstar(params, result, pool_num);
     }
 }
 
-void CESTFwdModel::EvaluateMTR(const ColumnVector &params, ColumnVector &result, int pool_num) const
+void CESTFwdModel::EvaluateCestRstar(const ColumnVector &params, ColumnVector &result, int pool_num) const
 {
     assert(pool_num > 1);
-    // LOG << "Outputting " << key << " for pool " << pool_num << endl;
+    //LOG << "Outputting CESTRstar for pool " << pool_num << endl;
+    // For this calculation, we use default T1/T2, NOT any inferred values or 
+    // image priors
+    ColumnVector mod_params = params;
+    if (t12soft) {
+        int t12_idx = (npool-1)*3 + 3 + (inferdrift ? 1 : 0);
+        for (int i=1; i<=npool; i++) {
+            mod_params(t12_idx+i) = T12master(1, i);
+            mod_params(t12_idx+npool+i) = T12master(2, i);
+        }
+    }
+    // We also do not use a water ppm offset
+    int ppm_off_idx = (npool-1)*2 + 2;
+    mod_params(ppm_off_idx) = 0;
+
     ColumnVector water_only, with_pool;
-    Evaluate(params, water_only, 1);
-    Evaluate(params, with_pool, pool_num);
-    // LOG << "freq: " << wvec.t();
-    // LOG << "water only: " << water_only.t();
-    // LOG << "With pool: " << with_pool.t();
+    Evaluate(mod_params, water_only, 1);
+    Evaluate(mod_params, with_pool, pool_num);
+    //LOG << "freq: " << wvec.t();
+    //LOG << "water only: " << water_only.t();
+    //LOG << "With pool: " << with_pool.t();
     // We evaluate the spectrum at a fixed PPM from the poolmat file, unless
     // the value is 0 in which case we use 50ppm (works for semisolid pool)
     double ppm_eval = 50;
@@ -313,23 +324,23 @@ void CESTFwdModel::EvaluateMTR(const ColumnVector &params, ColumnVector &result,
     {
         ppm_eval = poolppm(pool_num - 1);
     }
-    // LOG << "Evaluating at " << ppm_eval << ", " << (ppm_eval* wlam / 1e6) << endl;
+    //LOG << "Evaluating at " << ppm_eval << ", " << (ppm_eval* wlam / 1e6) << endl;
     // Evaluate at fixed PPM by linear interpolation. Note freq transformation
     // same as transformation applied to wvec
     double water = lin_interp(wvec, water_only, ppm_eval * wlam / 1e6);
     double pool = lin_interp(wvec, with_pool, ppm_eval * wlam / 1e6);
-    // LOG << "water " << water << endl;
-    // LOG << "pool " << pool << endl;
-    // LOG << "frac " << pool/water << endl;
+    //LOG << "water " << water << endl;
+    //LOG << "pool " << pool << endl;
+    //LOG << "frac " << pool/water << endl;
     result.ReSize(1);
-    result(1) = 100 * (water - pool) / water;
-    // LOG << "res " << result.t() << endl;
+    result(1) = 100 * (water - pool) / params(1);
+    //LOG << "res " << result.t() << endl;
 }
 
 /**
  * To evaluate only with single pool or 2-pool, need to restrict matrices to the relevant pools
  *
- * This is used in order to calculate MTR in the final output stage
+ * This is used in order to calculate CEST R* in the final output stage
  *
  * wvec - no change, this is vector of size nsamp
  * w1   - no change, this is vector of size nsamp
@@ -339,8 +350,7 @@ void CESTFwdModel::EvaluateMTR(const ColumnVector &params, ColumnVector &result,
  * kij - need to restict to rows/columns 1 and poolnum
  * T12 - need to restrict to rows 1 and poolnum
  */
-void CESTFwdModel::RestrictPools(
-    ColumnVector &M0, Matrix &wimat, Matrix &kij, Matrix &T12, int pool) const
+void CESTFwdModel::RestrictPools(ColumnVector &M0, Matrix &wimat, Matrix &kij, Matrix &T12, int pool) const
 {
     if (pool == 1)
     {
@@ -444,7 +454,6 @@ void CESTFwdModel::Evaluate(
         if (kij(j, 1) > 1e6)
             kij(j, 1) = 1e6; // exclude really extreme values
         kij(1, j) = kij(j, 1) * M0(j) / M0(1);
-
         place++;
     }
 
@@ -1101,7 +1110,7 @@ void CESTFwdModel::Mz_spectrum(ColumnVector &Mz, const ColumnVector &wvec, const
         k1i(i) = 1 / T12(1, i) + (kij.Row(i)).Sum();
         k2i(i) = 1 / T12(2, i) + (kij.Row(i)).Sum();
     }
-
+    
     // first population of A (with w=0)
     Matrix A(mpool * 3, mpool * 3);
     A = 0.0;
@@ -1152,6 +1161,7 @@ void CESTFwdModel::Mz_spectrum(ColumnVector &Mz, const ColumnVector &wvec, const
     Matrix AinvB(mpool, mpool);
     AinvB = 0.0;
     Matrix ExpmAt;
+
     for (int k = 1; k <= nfreq; k++)
     {
         if (w1(k) == 0.0)
