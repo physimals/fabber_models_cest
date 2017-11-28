@@ -212,6 +212,12 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) con
 
 void CESTFwdModel::InitParams(MVNDist &posterior) const
 {
+    // Check out dataspec is the right size
+    int nt = data.Nrows();
+    if (wvec.Nrows() != nt) {
+        throw InvalidOptionValue("dataspec", "", "Incorrect number of frequencies - should match number of data volumes");
+    }
+
     // load the existing precisions as the basis for any update
     SymmetricMatrix precisions;
     precisions = posterior.GetPrecisions();
