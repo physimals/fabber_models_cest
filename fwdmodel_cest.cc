@@ -1886,7 +1886,7 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 	for (int i = 1; i <= mpool; i++)
 	{
 		k1i(i) = 1 / T12(1, i) + (kij.Row(i)).Sum();
-		k2i(i) = 1 / T12(2, i) + (kij.Row(i)).Sum();
+		k2i(i) = 1 / T12(2, i) + (kij.Row(i)).Sum() - kij(i,mpool);
 	}
 
 	// Populate Diagonals of Relaxation Matrix
@@ -2225,13 +2225,13 @@ vector<double> CESTFwdModel::SuperLorentzianGenerator(vector<double>& deltac, do
 //*  		-All lineshapes are also multiplied by 1e6 to					*
 //*  		reduce rounding errors											*
 //***************************************************************************
-ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& wvec, double T2) const
+ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& gbInMat, double T2) const
 {
 	if (m_lineshape == "Lorentzian" || m_lineshape == "lorentzian")
 	{
-		ColumnVector tmp = (wvec); 
-		tmp = 1+spower_Mat(wvec,2)*T2*T2; 
-		for (int ii{1}; ii <=wvec.Nrows(); ++ii) 
+		ColumnVector tmp = (gbInMat); 
+		tmp = 1+spower_Mat(gbInMat,2)*T2*T2; 
+		for (int ii{1}; ii <=gbInMat.Nrows(); ++ii) 
 		{
 			tmp.Row(ii) = 1/tmp(ii); 
 		}
@@ -2281,22 +2281,22 @@ ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& wvec, double T2) con
 
 		NaturalSplineInterpolator interp(deltac,gc);
 
-		ColumnVector g(wvec);
-		for (int ii{1}; ii <= wvec.Nrows(); ++ii) 
+		ColumnVector g(gbInMat);
+		for (int ii{1}; ii <= gbInMat.Nrows(); ++ii) 
 		{ 
-		  g(ii) = interp(wvec(ii)); 
+		  g(ii) = interp(gbInMat(ii)); 
 		} 
 		return g;
 	}
 	else if (m_lineshape == "Gaussian" || m_lineshape == "gaussian")
 	{
-		ColumnVector g =  (T2/sqrt(2*M_PI))*exp(-wvec*wvec*T2*T2/2)*1e6;
+		ColumnVector g =  (T2/sqrt(2*M_PI))*exp(-gbInMat*gbInMat*T2*T2/2)*1e6;
 		return g;
 	}
 	else
 	{
 		cout << "CEST Lineshape: No Known Lineshape Selected" << endl;
-		ColumnVector g(wvec);
+		ColumnVector g(gbInMat);
 		g = 0.0;
 		return g;
 	}
