@@ -1844,7 +1844,7 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 		ColumnVector& Mz,			// Vector: Magnetization
 		const ColumnVector& wvec, 	// Vector: Saturation Pulse Offset (radians/s = ppm * 42.58*B0*2*pi)
 		const ColumnVector& w1,   	// Vector: B1-corrected Saturation Pulse (radians = uT*42.58*2*pi)
-		const ColumnVector& t,    	// Vector: Number Pulses
+		const ColumnVector& nPulses,    	// Vector: Number Pulses
 		const ColumnVector& M0,		// Vector: Pool Sizes
 		const Matrix& wi,			// Matrix: Pool offsets (radians/s = ppm * 42.58*B0*2*pi)
 		const Matrix& kij,			// Matrix: exchange rates for each pool (see below for in depth description)
@@ -1930,13 +1930,16 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 	int iNpSeg;
 	if (ptvec.Nrows() == 1)
 	{
-		Tr -= ptvec.Rows(1,ptvec.Nrows()).Sum()*t(1);
+		Tr -= ptvec.Rows(1,ptvec.Nrows()).Sum()*nPulses(1);
 		iNpSeg = 1;
 	}
 	else
 	{
-		Tr -= ptvec.Rows(1,ptvec.Nrows()-1).Sum()*t(1);
-		Tr -= ptvec(ptvec.Nrows())*(t(1)-1);
+		// Subtract saturation pulses off of total TR
+		Tr -= ptvec.Rows(1,ptvec.Nrows()-1).Sum()*nPulses(1);
+		
+		// Subtract saturation rest time off of total TR
+		Tr -= ptvec(ptvec.Nrows())*(nPulses(1)-1);
 
 		// Find CEST Saturation Train Pause (for Duty Cycle < 1.0) Matrix
 		Tdc = ptvec(ptvec.Nrows());
@@ -2069,13 +2072,13 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 			}
 
 			// Build the Pulse Train
-			Matrix Emdc = mpower(Emt*iSpoil*Edc,t(k)-1);
+			Matrix Emdc = mpower(Emt*iSpoil*Edc,nPulses(k)-1);
 			Matrix Emm = Eye;
 			Matrix Emb = Eye;
 
-			for (int jj=1; jj < t(k); ++jj)
+			for (int jj=1; jj < nPulses(k); ++jj)
 			{
-				if (jj == t(k)-1)
+				if (jj == nPulses(k)-1)
 					Emb = Emm;
 				Emm += mpower(Emt*iSpoil*Edc,jj);
 			}
