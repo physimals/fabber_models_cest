@@ -345,7 +345,7 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 		{ //dont expect large ratios
 			M0ratio = 1.0;
 		}
-		M0(j) = M0ratio * M0(1);
+		M0(j) = M0ratio;
 
 		place++;
 	}
@@ -1996,10 +1996,11 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 	ColumnVector M0i((mpool-1)*3+1);
 	M0i = 0.0;
 
-	for (int i = 1; i <= mpool-1; i++)
+	for (int i = 2; i <= mpool-1; i++)
 	{
 		M0i(i * 3) = M0(i);
 	}
+	M0i(3) = 1.0;
 	M0i((mpool-1)*3+1) = M0(mpool);
 
 
@@ -2093,8 +2094,8 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 
 	ColumnVector Mtemp = (M.Row(3)).AsColumn();
 	Mz = abs(Mtemp/Mtemp(iNoSat))*M0(1);
-	// int xx = write_ascii_matrix("Deltas.txt",wvec);
-	// xx =  write_ascii_matrix("Mz.txt", Mz);
+	// cout << M0(3) << endl;
+	// write_ascii_matrix("Mz.txt", Mz);
 }
 
 // Function that will raise a matrix to a power Power
