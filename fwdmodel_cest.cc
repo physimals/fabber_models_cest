@@ -850,6 +850,9 @@ void CESTFwdModel::Initialize(ArgsType& args)
 
 	//Steady State Modeling
 	// For Modeling the steady state Signal according to Listerud, Magn Reson Med 1997; 37: 693–705.
+
+	// Initializing m_T2m
+	m_T2m = 1e-5;
 	if (m_TR > 0.0 && m_EXmagMax > 0.0)
 	{
 		m_SS = true;

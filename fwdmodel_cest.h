@@ -150,7 +150,7 @@ protected:
 	string m_lineshape; // String that describes which lineshape to use
 
 	// Variables used to increase processing speed of SuperLorentzian Lineshape
-	mutable double m_T2m = -1e5; 
+	mutable double m_T2m; 
 	mutable std::vector<double> m_gc; 
 
 	// processing flags
