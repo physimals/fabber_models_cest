@@ -137,8 +137,8 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist& prior,
 		}
 	}
 
-	// B1 offset (fractional)
-	prior.means(place) = 0;
+	// B1corr Correction (fractional)
+	prior.means(place) = 1;
 	precisions(place, place) = 1e99; //1e20; //1e6;
 	place++;
 
@@ -378,9 +378,8 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 	 place++;
 	 END OLD */
 
-	// now B1 offset
-	float B1off = params(place) * 1e6; //scale the B1_off parameter to achieve proper updating of this parameter
-									   // (otherwise it is sufficently small that numerical diff is ineffective)
+	// now B1 Correction Factor
+	double B1corr = params(place); // Now is a correction factor, is more in line with what is output from scanners
 	place++;
 
 	// Drift
@@ -563,12 +562,13 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 		}
 	}
 
-	//deal with B1
-	if (B1off < -0.5)
-		B1off = -0.5; // B1 cannot go too small
-	if (B1off > 10)
-		B1off = 10; //unlikely to get this big (hardlimit in case of convergence problems)
-	ColumnVector w1 = w1vec * (1 + B1off); // w1 in radians!
+	// Correct B1 Inhomogeneities
+	if (B1corr < 0.0)
+		B1corr = 0.0; // B1 cannot be negative
+	if (B1corr > 5.0)
+		B1corr = 5.0; //unlikely to get this big (hardlimit in case of convergence problems)
+	
+	ColumnVector w1 = w1vec * B1corr; // w1 in radians!
 
 	/*
 	 if (pvcorr) {
@@ -593,7 +593,7 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 		if (m_SS)
 		{
 			// Only need to fix w1EX if using SS CEST
-			double w1EX = m_EXmagMax * (1+B1off);
+			double w1EX = m_EXmagMax * B1corr;
 			if (m_lineshape == "none" || M0.Nrows() == 1) // If only water pool, don't use a lineshape
 				Mz_spectrum_SS(result, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
 			else
@@ -983,7 +983,7 @@ void CESTFwdModel::NameParams(vector<string>& names) const
 			names.push_back("ppm_" + lettervec[i - 1]);
 		}
 	}
-	names.push_back("B1_off");
+	names.push_back("B1corr");
 	if (inferdrift)
 	{
 		names.push_back("drift");
