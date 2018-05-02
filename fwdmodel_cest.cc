@@ -351,10 +351,10 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 	kij = 0.0; //float ktemp;
 	for (int j = 2; j <= npool; j++)
 	{
-		kij(j, 1) = exp(params(place));  //non-linear transformation
+		kij(j, 1) = exp(paramcpy(place));  //non-linear transformation
 		if (kij(j, 1) > 1e6)
 			kij(j, 1) = 1e6; //exclude really extreme values
-		kij(1, j) = kij(j, 1) * M0(j) / M0(1);
+		kij(1, j) = kij(j, 1) * M0(j);
 
 		place++;
 
@@ -377,14 +377,14 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 	 END OLD */
 
 	// now B1 Correction Factor
-	double B1corr = params(place); // Now is a correction factor, is more in line with what is output from scanners
+	double B1corr = paramcpy(place); // Now is a correction factor, is more in line with what is output from scanners
 	place++;
 
 	// Drift
 	float drift = 0;
 	if (inferdrift)
 	{
-		drift = params(place) * 1e6; //scale this parameters like B1 offset
+		drift = paramcpy(place) * 1e6; //scale this parameters like B1 offset
 		place++;
 	}
 
@@ -2024,20 +2024,7 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 
 	for (int k = 1; k <= nfreq; k++)
 	{
-		if (w1(k) == 0.0)
-		{
-			// no saturation image - the z water magnetization is just a normal FLASH sequence
-			Matrix Er0 = expm(A*m_TR);
-		    ColumnVector Mz0 ((mpool-1)*3+1);
-		    Matrix Er0Temp ((mpool-1)*3+1, (mpool-1)*3+1);
-		    Er0Temp = (Eye-Spoil*C*Er0);
-		    Mz0 = Er0Temp.i()*((Eye-Er0)*M0i);
-		    M(3, k) = Mz0(3);
 
-		    iNoSat = k;
-		}
-		else
-		{
 			Matrix Ems ((mpool-1)*3+1, (mpool-1)*3+1);
 			Matrix Emt ((mpool-1)*3+1, (mpool-1)*3+1);
 
@@ -2092,17 +2079,24 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 			M.Column(k) = Mztemp.i() * (Es*Emdc*Emt*Spoil*(Eye-Er)+Es*Emb*Emt*iSpoil*(Eye-Edc)
 					+Eye-Es+Es*Emm*Ems*A)*M0i;
 
-		}
+
 	}
 
+	Matrix Er0 = expm(A*m_TR);
+	ColumnVector Mz0 ((mpool-1)*3+1);
+	Matrix Er0Temp ((mpool-1)*3+1, (mpool-1)*3+1);
+	Er0Temp = (Eye-Spoil*C*Er0);
+	Mz0 = Er0Temp.i()*((Eye-Er0)*M0i);
+
 	ColumnVector Mtemp = (M.Row(3)).AsColumn();
-	Mz = abs(Mtemp/Mtemp(iNoSat))*M0(1);
+	Mz = abs(Mtemp/Mz0(3))*M0(1);
 	// cout << M0(3) << endl;
+	// cout << M0(1) << endl;
 	// write_ascii_matrix("Mz.txt", Mz);
 }
 
 // Function that will raise a matrix to a power Power
-inline ReturnMatrix CESTFwdModel::mpower(const Matrix& Mat_Base, int Power) const
+ReturnMatrix CESTFwdModel::mpower(const Matrix& Mat_Base, int Power) const
 {
 	Matrix MExp (Mat_Base);
 	if (Power == 2)
