@@ -529,7 +529,7 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 	//wi(1) = wlocal;
 	for (int j = 1; j <= nsamp; j++)
 	{
-		wimat(1, j) = wlam * (ppmvec(1) + (j - 1) * drift) / 1e6;
+		wimat(1, j) = 0.0;
 	}
 	if (npool > 1)
 	{
@@ -538,9 +538,7 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 			//wi(i) = wlam*ppmvec(i)/1e6 + wlocal*(1+ppmvec(i)/1e6);
 			for (int j = 1; j <= nsamp; j++)
 			{
-				wimat(i, j) = wlam * ppmvec(i) / 1e6
-						+ wlam * (ppmvec(1) + (j - 1) * drift) / 1e6
-								* (1 + ppmvec(i) / 1e6);
+				wimat(i, j) = wlam * ppmvec(i) / 1e6;
 			}
 		}
 	}
@@ -583,9 +581,13 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 	 }
 	 */
 
+	double ppmoffset = wlam/1e6*ppmvec(1);
+	ColumnVector deltaHz = wvec;
+	deltaHz -= ppmoffset;
+
 	if (lorentz)
 	{
-		result = Mz_spectrum_lorentz(wvec, w1, tsatvec, M0, wimat, kij, T12);
+		result = Mz_spectrum_lorentz(deltaHz, w1, tsatvec, M0, wimat, kij, T12);
 	}
 	else
 	{
@@ -595,15 +597,15 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 			// Only need to fix w1EX if using SS CEST
 			double w1EX = m_EXmagMax * B1corr;
 			if (m_lineshape == "none" || M0.Nrows() == 1) // If only water pool, don't use a lineshape
-				Mz_spectrum_SS(result, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
+				Mz_spectrum_SS(result, deltaHz, w1, tsatvec, M0, wimat, kij, T12, w1EX);
 			else
 			{
-				Mz_spectrum_SS_LineShape(result, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
+				Mz_spectrum_SS_LineShape(result, deltaHz, w1, tsatvec, M0, wimat, kij, T12, w1EX);
 			}
 		}
 		else
 		{
-			Mz_spectrum(result, wvec, w1, tsatvec, M0, wimat, kij, T12);
+			Mz_spectrum(result, deltaHz, w1, tsatvec, M0, wimat, kij, T12);
 		}
 	}
 
@@ -616,7 +618,7 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 	{
 		for (int i = 1; i <= nexpool; i++)
 		{
-			Mz_contribution_lorentz_simple(Mzc, wvec, exI(i),
+			Mz_contribution_lorentz_simple(Mzc, wvec-ppmoffset, exI(i),
 					(exwimat.SubMatrix(i, i, 1, nsamp)).t(), exR(i));
 			Mz_extrapools += Mzc;
 		}
@@ -1237,12 +1239,12 @@ ReturnMatrix CESTFwdModel::PadeCoeffs(int m) const
 	return C;
 }
 
-void CESTFwdModel::Mz_spectrum(ColumnVector& Mz, const ColumnVector& wvec,
+void CESTFwdModel::Mz_spectrum(ColumnVector& Mz, const ColumnVector& deltaHz,
 		const ColumnVector& w1, const ColumnVector& t, const ColumnVector& M0,
 		const Matrix& wi, const Matrix& kij, const Matrix& T12) const
 {
 
-	int nfreq = wvec.Nrows(); // total number of samples collected
+	int nfreq = deltaHz.Nrows(); // total number of samples collected
 	int mpool = M0.Nrows();
 
 	Mz.ReSize(nfreq);
@@ -1329,9 +1331,9 @@ void CESTFwdModel::Mz_spectrum(ColumnVector& Mz, const ColumnVector& wvec,
 			for (int i = 1; i <= mpool; i++)
 			{
 				st = (i - 1) * 3;
-				// terms that involve the saturation frequency (wvec)
-				A(st + 1, st + 2) = -(wi(i, k) - wvec(k));
-				A(st + 2, st + 1) = wi(i, k) - wvec(k);
+				// terms that involve the saturation frequency (deltaHz)
+				A(st + 1, st + 2) = -(wi(i, k) - deltaHz(k));
+				A(st + 2, st + 1) = wi(i, k) - deltaHz(k);
 
 				if (steadystate)
 				{
@@ -1486,7 +1488,7 @@ void CESTFwdModel::Mz_spectrum(ColumnVector& Mz, const ColumnVector& wvec,
 	//return result;
 }
 
-ReturnMatrix CESTFwdModel::Mz_spectrum_lorentz(const ColumnVector& wvec,
+ReturnMatrix CESTFwdModel::Mz_spectrum_lorentz(const ColumnVector& deltaHz,
 		const ColumnVector& w1, const ColumnVector& t, const ColumnVector& M0,
 		const Matrix& wi, const Matrix& kij, const Matrix& T12) const
 {
@@ -1494,16 +1496,16 @@ ReturnMatrix CESTFwdModel::Mz_spectrum_lorentz(const ColumnVector& wvec,
 	//Analytic *steady state* solution to the *one pool* Bloch equations
 	// NB t is ignored becasue it is ss
 
-	int nfreq = wvec.Nrows(); // total number of samples collected
+	int nfreq = deltaHz.Nrows(); // total number of samples collected
 
 	double R1 = 1. / T12(1, 1);
 	double R2 = 1. / T12(2, 1);
 
-	ColumnVector result(wvec);
+	ColumnVector result(deltaHz);
 	double delw;
 	for (int k = 1; k <= nfreq; k++)
 	{
-		delw = wi(1, k) - wvec(k);
+		delw = wi(1, k) - deltaHz(k);
 		result(k) = (M0(1) * R1 * (R2 * R2 + delw * delw))
 				/ (R1 * (R2 * R2 + delw * delw) + w1(k) * w1(k) * R2);
 	}
@@ -1562,7 +1564,7 @@ void CESTFwdModel::Ainverse(const Matrix A, RowVector& Ai) const
 }
 
 void CESTFwdModel::Mz_contribution_lorentz_simple(ColumnVector& Mzc,
-		const ColumnVector& wvec, const double& I, const ColumnVector& wi,
+		const ColumnVector& deltaHz, const double& I, const ColumnVector& wi,
 		const double& R) const
 {
 
@@ -1570,12 +1572,12 @@ void CESTFwdModel::Mz_contribution_lorentz_simple(ColumnVector& Mzc,
 	// A simply parameterised Lorentzian (represeting a single pool solution to the Bloch equation)
 	// Following Jones MRM 2012
 
-	int nfreq = wvec.Nrows(); // total number of samples collected
+	int nfreq = deltaHz.Nrows(); // total number of samples collected
 
 	double delw;
 	for (int k = 1; k <= nfreq; k++)
 	{
-		delw = wi(k) - wvec(k);
+		delw = wi(k) - deltaHz(k);
 		Mzc(k) = I * ((R * R) / (4 * delw * delw + R * R));
 	}
 
@@ -1585,7 +1587,7 @@ void CESTFwdModel::Mz_contribution_lorentz_simple(ColumnVector& Mzc,
 // Models the Bloch-McConnell equations based on Listerud, Magn Reson Med 1997; 37: 693–705.
 void CESTFwdModel::Mz_spectrum_SS(
 		ColumnVector& Mz,			// Vector: Magnetization
-		const ColumnVector& wvec, 	// Vector: Saturation Pulse Offset (radians/s = ppm * 42.58*B0*2*pi)
+		const ColumnVector& deltaHz, 	// Vector: Saturation Pulse Offset (radians/s = ppm * 42.58*B0*2*pi)
 		const ColumnVector& w1,   	// Vector: B1-corrected Saturation Pulse (radians = uT*42.58*2*pi)
 		const ColumnVector& t,    	// Vector: Number Pulses
 		const ColumnVector& M0,		// Vector: Pool Sizes
@@ -1608,7 +1610,7 @@ void CESTFwdModel::Mz_spectrum_SS(
 	 *********************************************************************/
 
 	// total number of samples collected
-	int nfreq = wvec.Nrows();
+	int nfreq = deltaHz.Nrows();
 
 	// Number of Pools to be solved
 	int mpool = M0.Nrows();
@@ -1779,7 +1781,7 @@ void CESTFwdModel::Mz_spectrum_SS(
 				{
 					Matrix Ws (3, 3);
 					Ws = 0.0;
-					Ws(2,1) = (wi(nn,k) - wvec(k));
+					Ws(2,1) = (wi(nn,k) - deltaHz(k));
 					Ws(1,2) = -Ws(2,1);
 					Ws(3,2) = w1(k)*pmagvec(jj);
 					Ws(2,3) = -Ws(3,2);
@@ -1843,7 +1845,7 @@ void CESTFwdModel::Mz_spectrum_SS(
 // Models the Bloch-McConnell equations based on Listerud, Magn Reson Med 1997; 37: 693–705.
 void CESTFwdModel::Mz_spectrum_SS_LineShape(
 		ColumnVector& Mz,			// Vector: Magnetization
-		const ColumnVector& wvec, 	// Vector: Saturation Pulse Offset (radians/s = ppm * 42.58*B0*2*pi)
+		const ColumnVector& deltaHz, 	// Vector: Saturation Pulse Offset (radians/s = ppm * 42.58*B0*2*pi)
 		const ColumnVector& w1,   	// Vector: B1-corrected Saturation Pulse (radians = uT*42.58*2*pi)
 		const ColumnVector& nPulses,    	// Vector: Number Pulses
 		const ColumnVector& M0,		// Vector: Pool Sizes
@@ -1866,7 +1868,7 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 	 *********************************************************************/
 
 	// total number of samples collected
-	int nfreq = wvec.Nrows();
+	int nfreq = deltaHz.Nrows();
 
 	// Number of Pools to be solved
 	int mpool = M0.Nrows();
@@ -2009,8 +2011,8 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 	M = 0.0;
 
 	// Calculate MT RF saturation rate
-	ColumnVector gb(wvec);
-	gb = absLineShape(wvec - wi.Row(mpool).t(),T12(2,mpool));
+	ColumnVector gb(deltaHz);
+	gb = absLineShape(deltaHz - wi.Row(mpool).t(),T12(2,mpool));
 
 
 	/**********************************************************************
@@ -2047,7 +2049,7 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 				{
 					Matrix Ws (3, 3);
 					Ws = 0.0;
-					Ws(2,1) = (wvec(k) - wi(nn,k));
+					Ws(2,1) = (deltaHz(k) - wi(nn,k));
 					Ws(1,2) = -Ws(2,1);
 					Ws(3,2) = w1(k)*pmagvec(jj);
 					Ws(2,3) = -Ws(3,2);
@@ -2247,17 +2249,17 @@ ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& gbInMat, double T2) 
 	{
 
 		
-		// if (wvec.MinimumAbsoluteValue() > 750*2*M_PI) // set a little below 1000 Hz in case B0 inhomogeneity causes issues
+		// if (deltaHz.MinimumAbsoluteValue() > 750*2*M_PI) // set a little below 1000 Hz in case B0 inhomogeneity causes issues
 		// {
 		// 	vector<double> deltas;
-		// 	for (int ii{1}; ii <= wvec.Nrows(); ++ii)
+		// 	for (int ii{1}; ii <= deltaHz.Nrows(); ++ii)
 		// 	{
-		// 		deltas.push_back(wvec(ii));
+		// 		deltas.push_back(deltaHz(ii));
 		// 	}
 		// 	vector<double> gc = SuperLorentzianGenerator(deltas,T2);
 
-		// 	ColumnVector g(wvec);
-		// 	for (int ii{1}; ii <= wvec.Nrows(); ++ii)
+		// 	ColumnVector g(deltaHz);
+		// 	for (int ii{1}; ii <= deltaHz.Nrows(); ++ii)
 		// 	{
 		// 		g(ii) = gc.at(ii-1);
 		// 	}
