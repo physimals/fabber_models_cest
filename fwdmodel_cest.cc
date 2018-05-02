@@ -189,12 +189,9 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist& prior,
 	if (t12soft)
 	{
 		//T1 values
-		for (int i = 1; i <= npool; i++)
-		{
-			prior.means(place) = T12master(1, i);
-			precisions(place, place) = 44.4; //all T1s have same prior uncertainty
-			place++;
-		}
+		prior.means(place) = T12master(1, 1);
+		precisions(place, place) = 44.4; //all T1s have same prior uncertainty
+		place++;
 
 		//T12 values
 		for (int i = 1; i <= npool; i++)
@@ -365,6 +362,7 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 
 	// frequency offset next
 	ppmvec = params.Rows(place, place + npool);
+	
 	place += npool;
 	// Frist entry is offset due to field, rest are res freq. of the pools rel. to water
 
@@ -461,15 +459,17 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 	if (t12soft)
 	{
 		// T12 values
-		for (int i = 1; i <= npool; i++)
+		T12(1, 1) = paramcpy(place);
+		if (T12(1, 1) < 1e-12)
+			T12(1, 1) = 1e-12; // 0 is no good for a T1 value
+		if (T12(1, 1) > 10)
+			T12(1, 1) = 10; // Prevent convergence issues causing T1 to blow up
+		for (int i = 2 ; i <=npool; ++i)
 		{
-			T12(1, i) = paramcpy(place);
-			if (T12(1, i) < 1e-12)
-				T12(1, i) = 1e-12; // 0 is no good for a T1 value
-			if (T12(1, i) > 10)
-				T12(1, i) = 10; // Prevent convergence issues causing T1 to blow up
-			place++;
+			T12(1,i) = T12(1,1);
 		}
+		place ++;
+
 		for (int i = 1; i <= npool; i++)
 		{
 			T12(2, i) = paramcpy(place);
@@ -998,10 +998,8 @@ void CESTFwdModel::NameParams(vector<string>& names) const
 	 }*/
 	if (t12soft)
 	{
-		for (int i = 1; i <= npool; i++)
-		{
-			names.push_back("T1" + lettervec[i - 1]);
-		}
+		names.push_back("T1");
+
 		for (int i = 1; i <= npool; i++)
 		{
 			names.push_back("T2" + lettervec[i - 1]);

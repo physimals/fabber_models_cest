@@ -34,7 +34,7 @@ public:
 	virtual int NumParams() const
 	{
 		return (3 * npool - 1) + 1 + (inferdrift ? 1 : 0)
-				+ (t12soft ? (2 * npool) : 0) + (3 * nexpool);
+				+ (t12soft ? (1 + npool) : 0) + (3 * nexpool);
 	}
 
 	virtual ~CESTFwdModel()
