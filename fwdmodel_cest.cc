@@ -713,11 +713,10 @@ void CESTFwdModel::Initialize(ArgsType& args)
 	// water centre
 	float wdefault = 42.58e6 * 3 * 2 * M_PI; //the default centre freq. (3T)
 	
-	// Should be negative to reflect conversion between ppm and Hz
 	if (poolmat(1, 1) > 0)
-		wlam = -poolmat(1, 1) * 2 * M_PI;
+		wlam = poolmat(1, 1) * 2 * M_PI;
 	else
-		wlam = -wdefault;
+		wlam = wdefault;
 	// ppm offsets
 	poolppm = poolmat.SubMatrix(2, npool, 1, 1);
 	// exchange rate
@@ -786,7 +785,6 @@ void CESTFwdModel::Initialize(ArgsType& args)
 	// setup vectors that specify details of each data point
 	
 	// sampling frequency
-	// wlam is negative because +Hz -> -ppm (3.5 ppm is downfield of water, whereas -2.5 ppm is upfield)
 	wvec = dataspec.Column(1) * wlam / 1e6;  
 	
 	// B1 value, convert to radians equivalent
@@ -796,7 +794,7 @@ void CESTFwdModel::Initialize(ArgsType& args)
 	tsatvec = dataspec.Column(3);
 
 	LOG << " Model parameters: " << endl;
-	LOG << " Water - freq. (MHz) = " << -wlam / 2 / M_PI << endl;
+	LOG << " Water - freq. (MHz) = " << wlam / 2 / M_PI << endl;
 	LOG << "         T1    (s)   = " << T12master(1, 1) << endl;
 	LOG << "         T2    (s)   = " << T12master(2, 1) << endl;
 	;
@@ -2006,7 +2004,6 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 	M0i(3) = 1.0;
 	M0i((mpool-1)*3+1) = M0(mpool);
 
-
 	Matrix M((mpool-1)*3+1, nfreq);
 	M = 0.0;
 
@@ -2014,7 +2011,7 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 	ColumnVector gb(deltaHz);
 	gb = absLineShape(deltaHz - wi.Row(mpool).t(),T12(2,mpool));
 
-
+	
 	/**********************************************************************
 	 *					Solve for Mz
 	 **********************************************************************/
