@@ -124,7 +124,7 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist& prior,
 
 	// frequency offsets (ppm)
 	prior.means(place) = 0; //water centre offset
-	precisions(place, place) = 10;
+	precisions(place, place) = 100;
 	place++;
 
 	if (npool > 1)
@@ -288,10 +288,10 @@ void CESTFwdModel::InitParams(MVNDist& posterior) const
 	float val;
 	val = data.Minimum1(ind); // find the minimum in the z-spectrum
 	val = wvec(ind) * 1e6 / wlam; //frequency of the minimum in ppm
-	if (val > 0.5)
-		val = 0.5; //put a limit on the value
-	if (val < -0.5)
-		val = -0.5;
+	if (val > 1.5)
+		val = 1.5; //put a limit on the value
+	if (val < -1.5)
+		val = -1.5;
 	int ppmind = 2 * npool;
 	posterior.means(ppmind) = val;
 
@@ -2010,7 +2010,7 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 	// Calculate MT RF saturation rate
 	ColumnVector gb(deltaHz);
 	gb = absLineShape(deltaHz - wi.Row(mpool).t(),T12(2,mpool));
-
+	
 	
 	/**********************************************************************
 	 *					Solve for Mz
@@ -2282,7 +2282,11 @@ ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& gbInMat, double T2) 
 		ColumnVector g(gbInMat);
 		for (int ii{1}; ii <= gbInMat.Nrows(); ++ii) 
 		{ 
-		  g(ii) = interp(gbInMat(ii)); 
+		  g(ii) = interp(gbInMat(ii));
+		  if (g(ii) < 0)
+		  {
+			  g(ii) = 0;
+		  }
 		} 
 		return g;
 	}
