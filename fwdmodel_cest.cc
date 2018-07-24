@@ -2257,7 +2257,7 @@ ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& gbInMat, double T2) 
 		// 	return g;
 		// }
 
-		double cutoff = 500*2*M_PI;
+		double cutoff = 1000*2*M_PI;
 
 		vector<double> deltac;
 		deltac.reserve(2e3);
