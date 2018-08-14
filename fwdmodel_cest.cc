@@ -130,42 +130,6 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist &prior,
         place++;
     }
 
-    // trough thresh
-    //prior.means(place) = 0;
-    //precisions(place,place) = 1e-12;
-    //place++;
-
-    /*
-     int idx = 10; //should be next entry in priors
-     if (pvcorr) {
-       // M0
-       prior.means(idx) = 0.0;
-       prior.means(idx+1) = 0.0;
-       prior.means(idx+2) = 0.15;
-       
-       precisions(idx,idx) = 1e-12;
-       precisions(idx+1,idx+1) = 100;
-       precisions(idx+2,idx+2) = 2500; 
-       
-       // exchnage consts (these are log_e)
-       prior.means(idx+3) = 3;
-       precisions(idx+3,idx+3) = 1;
-       prior.means(idx+4) = 3.7;
-       precisions(idx+4,idx+4) = 1;
-
-       prior.means(idx+5) = 0.0;
-       precisions(idx+5,idx+5) = 1e-12;
-
-       prior.means(idx+6) = 1.0;
-       precisions(idx+6,idx+6) = 1e12;
-       prior.means(idx+7) = 0.0;
-       precisions(idx+7,idx+7) = 1e12;
-       prior.means(idx+8) = 0.0;
-       precisions(idx+8,idx+8) = 1e12;
-       idx += 9;
-     }
-     */
-
     if (t12soft)
     {
         //T1 values
@@ -186,33 +150,18 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist &prior,
         }
     }
 
-    //else { //no T12 inference
-    //  for (int i=0; i<npool; i++) {
-    //	 precisions(idx+i,idx+i) = 1e99;
-    //  }
-    //}
-
-    /*
-     // MT pool
-     if (mtpool) {
-       prior.means(place) = 0;
-       precisions(place,place) = 1e12;
-       place++;
-       prior.means(place) = 0;
-       precisions(place,place) = 1e12;
-       place++;
-       prior.means(place) = 0;
-       precisions(place,place) = 1e12;
-       place++;
-       prior.means(place) = 0;
-       precisions(place,place) = 1e12;
-       place++;
-       prior.means(place) = 0;
-       precisions(place,place) = 1e12;
-       place++;
-     }
-     */
-
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    //Hardcoded CSF pool T1, T2 priors
+    //T1csf
+    prior.means(place) = 1.9;//T12master(1,1);
+    precisions(place, place) = 44.4;
+    place++;
+    //T2csf
+    prior.means(place) = 0.25;//T12master(2,1);
+    precisions(place,place) = 1/std::pow(prior.means(place)/5, 2);
+    place++;
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    
     // Extra ('indepdnent') pools
     if (nexpool > 0)
     {
