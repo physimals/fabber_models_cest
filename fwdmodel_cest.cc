@@ -75,6 +75,15 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist &prior,
     {
         for (int i = 2; i <= npool; i++)
         {
+            //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+            //If pool2 in a 3+ pool model, assume this is the amide pool and specify parameters used for processing AMICI data
+            if ((i == 2) & (npool > 2))
+            {
+                prior.means(place) = 0.00080357; // 90mM/112M;
+                precisions(place, place) = 3.136e7; // 20mM/112M;
+            }
+            //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
             if (setconcprior)
             {
                 // priors have been specified via the poolmat
