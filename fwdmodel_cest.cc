@@ -161,7 +161,7 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist &prior,
     precisions(place,place) = 1/std::pow(prior.means(place)/5, 2);
     place++;
     //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    
+
     // Extra ('indepdnent') pools
     if (nexpool > 0)
     {
@@ -231,6 +231,16 @@ void CESTFwdModel::InitParams(MVNDist &posterior) const
 
 void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result) const
 {
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    //Don't fit voxels < 50% tissue. Still must be masked in in order to have the default value
+    float PV_THRESHOLD = 0.50;
+    ColumnVector tissuepvval(1);
+    tissuepvval = this->suppdata;
+
+    //Used for fixing CSF MO
+    const float CSF_TISS_M0RATIO = 0.5269;
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
     // ensure that values are reasonable
     // negative check
     ColumnVector paramcpy = params;
