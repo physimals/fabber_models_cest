@@ -303,16 +303,6 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result) co
     place += npool;
     // Frist entry is offset due to field, rest are res freq. of the pools rel. to water
 
-    /* OLD
-   float ppm_off = params(place); // frequncy offset due to field
-    place++;
-
-    float ppm_apt = params(place);
-    place++;
-    float ppm_mt = params(place);
-    place++;
-    END OLD */
-
     // now B1 offset
     float B1off = params(place) * 1e6; //scale the B1_off parameter to achieve proper updating of this parameter
                                        // (otherwise it is sufficently small that numerical diff is ineffective)
@@ -325,73 +315,6 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result) co
         drift = params(place) * 1e6; //scale this parameters like B1 offset
         place++;
     }
-
-    //float floorval = params(place);
-
-    //place++;
-
-    /*
-    // PV correction section (untested)
-	ColumnVector M0_WM(npool);
-	Matrix kij_WM(npool,npool);
-	Matrix T12_WM(2,npool);
-	Matrix T12_CSF(2,1);
-	Matrix M0_CSF(1,1);
-	float PV_GM;
-	float PV_WM;
-	float PV_CSF;
-    if (pvcorr) 
-      {
-
-	// now parameters for WM
-	M0_WM(1) = paramcpy(place); // this is the M0 value of water
-	if (M0_WM(1)<1e-4) M0_WM(1)=1e-4; //M0 of water cannot disapear all together
-	place++;
-	// this code here if parameters contains actual M0 values
-	//M0.Rows(2,npool) = paramcpy.Rows(place,place+npool-1-1);
-	// place +=npool-1;
-	
-	// values in the parameters are ratios of M0_water
-	float M0WMratio;
-	for (int j=2; j<=npool; j++) {
-	  M0WMratio = paramcpy(place);
-	  if (M0WMratio > 0.1) { //dont expect large ratios
-	    M0WMratio = 0.1;
-	  }
-	  M0_WM(j) = M0WMratio*M0_WM(1);
-	  
-	  place++;
-	}
-	
-	// now exchange - we assume that only significant exchnage occurs with water
-	kij_WM=0.0; //float ktemp;
-	for (int j=2; j<=npool; j++) {
-	  //ktemp = exp(params(place)); //this is the 'fundamental rate const - non-linear transformation
-	  //kij(j,1) = ktemp*M0(1);
-	  //kij(1,j) = ktemp*M0(j);
-	  kij_WM(j,1) = exp(params(place));  //non-linear transformation
-	  kij_WM(1,j) =kij_WM(j,1)*M0_WM(j)/M0_WM(1);
-	  
-	  place++;
-	}
-
-	  // CSF
-	  M0_CSF = paramcpy(place);
-	  place++;
-
-	  //partial volume estimates
-	  PV_GM = paramcpy(place);
-	  place++;
-	  PV_WM = paramcpy(place);
-	  place++;
-	  PV_CSF = paramcpy(place);
-	  place++;
-	  
-	  //T12 fixed
-	  T12_WM = T12WMmaster;
-	  T12_CSF = T12CSFmaster;
-      }
-    */
 
     // T12 parameter values
     if (t12soft)
@@ -422,14 +345,6 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result) co
         T12 = T12master;
     }
 
-    // MT pool
-    /*
-    if (mtpool) {
-      mtparams = params.SubMatrix(place,place+5,1,1);
-      place += 5;
-    }
-    */
-
     // Extra pools
     if (nexpool > 0)
     {
@@ -443,18 +358,6 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result) co
             place++;
         }
     }
-
-    //cout << "Parameters set up" << endl;
-    //cout << "M0: " << M0.t() << endl << "wi: " << wi.t() << endl << "kij: " << kij << endl;
-
-    //MODEL - CEST
-
-    //no saturation image first
-    //ColumnVector nosat(1);
-    /*if (pvcorr) {
-      nosat = PV_GM*M0.Row(1) + PV_WM*M0_WM.Row(1) + PV_CSF*M0_CSF.Row(1);}
-    */
-    //nosat = M0.Row(1);
 
     // deal with frequencies
     //ColumnVector wi(npool);
@@ -502,18 +405,14 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result) co
         B1off = 10;                        //unlikely to get this big (hardlimit in case of convergence problems)
     ColumnVector w1 = w1vec * (1 + B1off); // w1 in radians!
 
-    /*
-	 if (pvcorr) {
-	   ColumnVector GM_result;
-	   GM_result = Mz_spectrum(wvec[n],w1,t[n],M0,wi,kij,T12);
-	   ColumnVector WM_result;
-	   WM_result = Mz_spectrum(wvec[n],w1,t[n],M0_WM,wi,kij_WM,T12_WM);
-	   ColumnVector CSF_result;
-	   CSF_result = Mz_spectrum(wvec[n],w1,t[n],M0_CSF,wi.Row(1),kij.SubMatrix(1,1,1,1),T12_CSF);
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    //Generate tissue z spectrum if pv ~= 0 (otherwise we're doing csf-only fit)
+    ColumnVector Mztissue(wvec);
+    if (tissuepvval(1) >= PV_THRESHOLD){
+        Mz_spectrum(Mztissue, wvec, w1, tsatvec, M0, wimat, kij, T12);
+    }
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-	   thisresult = PV_GM*GM_result + PV_WM*WM_result + PV_CSF*CSF_result;
-	 }
-   */
 
     if (lorentz)
     {
