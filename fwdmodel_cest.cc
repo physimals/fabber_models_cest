@@ -418,6 +418,11 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result) co
     }
     //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    //If return here then the effect of extra pools is not implemented
+    //return;
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
     // Extra pools
     if (nexpool > 0)
     {
@@ -431,7 +436,7 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result) co
             place++;
         }
     }
-    
+
     // frequencies for the extra pools
     Matrix exwimat(nexpool, nsamp);
     if (nexpool > 0)
@@ -768,6 +773,14 @@ void CESTFwdModel::NameParams(vector<string> &names) const
             names.push_back("T2" + lettervec[i - 1]);
         }
     }
+
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    //Names of additional PV paramters
+    
+    names.push_back("T1csf");
+    names.push_back("T2csf");
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
     if (nexpool > 0)
     {
         for (int i = 1; i <= nexpool; i++)
