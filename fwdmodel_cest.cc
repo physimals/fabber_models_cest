@@ -345,20 +345,6 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result) co
         T12 = T12master;
     }
 
-    // Extra pools
-    if (nexpool > 0)
-    {
-        for (int i = 1; i <= nexpool; i++)
-        {
-            exI(i) = params(place);
-            place++;
-            exppmvec(i) = params(place);
-            place++;
-            exR(i) = params(place);
-            place++;
-        }
-    }
-
     // deal with frequencies
     //ColumnVector wi(npool);
     int nsamp = wvec.Nrows();
@@ -385,19 +371,6 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result) co
     // species b is at ppm*wlam, but also include offset of main field
     //cout << wi << endl;
 
-    // frequencies for the extra pools
-    Matrix exwimat(nexpool, nsamp);
-    if (nexpool > 0)
-    {
-        for (int i = 1; i <= nexpool; i++)
-        {
-            for (int j = 1; j <= nsamp; j++)
-            {
-                exwimat(i, j) = wlam * ppmvec(i) / 1e6 + wlam * (ppmvec(1) + (j - 1) * drift) / 1e6 * (1 + exppmvec(i) / 1e6);
-            }
-        }
-    }
-
     //deal with B1
     if (B1off < -0.5)
         B1off = -0.5; // B1 cannot go too small
@@ -411,16 +384,65 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result) co
     if (tissuepvval(1) >= PV_THRESHOLD){
         Mz_spectrum(Mztissue, wvec, w1, tsatvec, M0, wimat, kij, T12);
     }
+
+    //Now repeat but for one pool to get CSF Lorentzian
+    ColumnVector M0csf(1);
+    M0csf(1) = M0(1) * CSF_TISS_M0RATIO;
+
+    if (M0csf(1) < 1e-4){
+       M0csf(1) = 1e-4;
+    }
+
+    Matrix T12csf(2,1);
+    T12csf(1,1) = paramcpy(place);
+    place++;
+    T12csf(2,1) = paramcpy(place);
+    place++;
+    Matrix kij_csf(1,1);
+    kij_csf(1,1) = 0.0;
+    
+    Matrix wimat_csf(1,nsamp);
+    for (int j = 1; j <= nsamp; j++) {
+        wimat_csf(1, j) = wlam * (ppmvec(1)+(j - 1) * drift) / 1e6;
+    }
+
+    //a csf spectrum is always generated
+    ColumnVector Mzcsf(wvec); 
+    Mz_spectrum(Mzcsf, wvec, w1, tsatvec, M0csf, wimat_csf, kij_csf, T12csf);
+    
+    //decide whether the result is going to be a PV-weighted sum (when PVE>threshold), or else just a CSF lineshape
+    if (tissuepvval(1) >= PV_THRESHOLD){
+        result = Mztissue.operator *(tissuepvval)+ Mzcsf.operator *(1.0-tissuepvval);
+    } else{
+        result = Mzcsf;
+    }
     //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-
-    if (lorentz)
+    // Extra pools
+    if (nexpool > 0)
     {
-        result = Mz_spectrum_lorentz(wvec, w1, tsatvec, M0, wimat, kij, T12);
+        for (int i = 1; i <= nexpool; i++)
+        {
+            exI(i) = params(place);
+            place++;
+            exppmvec(i) = params(place);
+            place++;
+            exR(i) = params(place);
+            place++;
+        }
     }
-    else
+    
+    // frequencies for the extra pools
+    Matrix exwimat(nexpool, nsamp);
+    if (nexpool > 0)
     {
-        Mz_spectrum(result, wvec, w1, tsatvec, M0, wimat, kij, T12);
+        for (int i = 1; i <= nexpool; i++)
+        {
+            for (int j = 1; j <= nsamp; j++)
+            {
+                exwimat(i, j) = wlam * ppmvec(i) / 1e6 + wlam * (ppmvec(1) + (j - 1) * drift) / 1e6 * (1 + exppmvec(i) / 1e6);
+            }
+        }
     }
 
     // extra pools
@@ -439,14 +461,6 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result) co
 
     //cout << Mz_extrapools << endl;
     result = result - M0(1) * Mz_extrapools;
-
-    //for (int i=1; i<=result.Nrows(); i++) {
-    //  if(result(i) < floorval) result(i) = floorval;
-    //}
-
-    //result &= nosat;
-
-    //cout << cest_result.t() << endl;
 
     return;
 }
