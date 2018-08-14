@@ -41,7 +41,7 @@ void CESTFwdModel::GetOptions(vector<OptionSpec> &opts) const
 
 std::string CESTFwdModel::GetDescription() const
 {
-    return "Model for Chemical Exchange Saturation transfer";
+    return "Model for Chemical Exchange Saturation transfer, with partial volume correction based on supplied partial volume estimate NIFTI map (via --suppdata option)";
 }
 
 string CESTFwdModel::ModelVersion() const
