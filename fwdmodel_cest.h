@@ -31,8 +31,11 @@ public:
     virtual void NameParams(vector<string> &names) const;
     virtual int NumParams() const
     {
+        //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+        //Added '+2' to account for the 2 PV correction parameters used in this model (T1csf, T2csf)
         return (3 * npool - 1) + 1 + (inferdrift ? 1 : 0) + (t12soft ? (2 * npool) : 0)
-            + (3 * nexpool);
+            + (3 * nexpool) + 2;
+        //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
     }
 
     virtual ~CESTFwdModel()
