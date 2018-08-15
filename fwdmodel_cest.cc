@@ -84,18 +84,6 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) con
                 // hardcoded default of zero mean and (relatively) uniformative precision
                 // prior mean of zero set above
                 precisions(place, place) = 1e2;
-
-                //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-                //Hardcoded pool b prec, for testing
-                 if ((i == 2) & (npool > 2)) {
-                    // Hardcode initialization for concentration
-                    // 90mM/112M; //0.00089286; //72e-3/112; - fixed value for human
-                    prior.means(place) = 0.00080357; 
-                    // 20mM/112M;  4e6; // precision is 1/(std^2); //1e99; - fixed value for human
-                    precisions(place, place) = 3.136e7;
-                }
-                //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
                 place++;
             }
         }
