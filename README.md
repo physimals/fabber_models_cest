@@ -8,8 +8,11 @@ cerebrospinal fluid (CSF) T1 and T2, which are saved as outputs.
 
 Presently 4 parameters are hardcoded with a bias towards analysis of human data:
 T1csf prior mean - CSF pool T1
+
 T2csf prior mean - CSF pool T2
+
 CSF_TISS_M0RATIO - ratio of CSF M0 to tissue M0, based on healthy subjects
+
 PV_THRESHOLD - voxels with a tissue PV below this threshold are treated as CSF-only
 
 Below is information common to both this and the standard CEST model.
