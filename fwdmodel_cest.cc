@@ -193,6 +193,16 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) con
         }
     }
 
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    //CSF pool T1 and T2 priors
+    prior.means(place) = 1.9;
+    precisions(place, place) = 44.4;
+    place++;
+    prior.means(place) = 0.25;
+    precisions(place,place) = 1/std::pow(prior.means(place)/5, 2);
+    place++;
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
     // Extra ('indepdnent') pools
     if (nexpool > 0)
     {
@@ -419,6 +429,17 @@ void CESTFwdModel::RestrictPools(ColumnVector &M0, Matrix &wimat, Matrix &kij, M
 void CESTFwdModel::Evaluate(
     const ColumnVector &params, ColumnVector &result, int restrict_pool) const
 {
+
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    //Don't fit voxels < 50% tissue. Still must be masked in in order to have the default value
+    float PV_THRESHOLD = 0.50;
+    ColumnVector tissuepvval(1);
+    tissuepvval = this->suppdata;
+
+    //Used for fixing CSF MO
+    const float CSF_TISS_M0RATIO = 0.5269;
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
     // ensure that values are reasonable
     // negative check
     ColumnVector paramcpy = params;
@@ -623,6 +644,15 @@ void CESTFwdModel::Evaluate(
     }
     // species b is at ppm*wlam, but also include offset of main field
 
+    // deal with B1
+    // B1 cannot go too small
+    if (B1off < -0.5)
+        B1off = -0.5;
+    // unlikely to get this big (hardlimit in case of convergence problems)
+    if (B1off > 10)
+        B1off = 10;
+    ColumnVector w1 = w1vec * (1 + B1off); // w1 in radians!
+
     // frequencies for the extra pools
     Matrix exwimat(nexpool, nsamp);
     if (nexpool > 0)
@@ -636,15 +666,6 @@ void CESTFwdModel::Evaluate(
             }
         }
     }
-
-    // deal with B1
-    // B1 cannot go too small
-    if (B1off < -0.5)
-        B1off = -0.5;
-    // unlikely to get this big (hardlimit in case of convergence problems)
-    if (B1off > 10)
-        B1off = 10;
-    ColumnVector w1 = w1vec * (1 + B1off); // w1 in radians!
 
     /*
      if (pvcorr) {
@@ -664,14 +685,57 @@ void CESTFwdModel::Evaluate(
         // We are restriction the solution to the water pool + possibly one other pool
         RestrictPools(M0, wimat, kij, T12, restrict_pool);
     }
-
-    if (lorentz)
-    {
-        result = Mz_spectrum_lorentz(wvec, w1, tsatvec, M0, wimat, kij, T12);
-    }
     else
     {
-        Mz_spectrum(result, wvec, w1, tsatvec, M0, wimat, kij, T12);
+        //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+        //Generate tissue z spectrum if pv ~= 0 (otherwise we're doing csf-only fit)
+        ColumnVector Mztissue(wvec);
+
+        if (tissuepvval(1) >= PV_THRESHOLD){
+            //PV correction supports lorentz option for 'tissue' spectrum
+            if (lorentz)
+            {
+                Mztissue = Mz_spectrum_lorentz(wvec, w1, tsatvec, M0, wimat, kij, T12);
+            }
+            else
+            {
+                //The complete tissue spectrum
+                Mz_spectrum(Mztissue, wvec, w1, tsatvec, M0, wimat, kij, T12);
+            }
+        }
+
+        //Now repeat but for one pool to get CSF Lorentzian
+        ColumnVector M0csf(1);
+        M0csf(1) = M0(1) * CSF_TISS_M0RATIO;
+
+        if (M0csf(1) < 1e-4)
+        {
+            M0csf(1) = 1e-4;
+        }
+
+        Matrix T12csf(2,1);
+        T12csf(1,1) = paramcpy(place);
+        place++;
+        T12csf(2,1) = paramcpy(place);
+        place++;
+        Matrix kij_csf(1,1);
+        kij_csf(1,1) = 0.0;
+        
+        Matrix wimat_csf(1,nsamp);
+        for (int j = 1; j <= nsamp; j++) {
+            wimat_csf(1, j) = wlam * (ppmvec(1)+(j - 1) * drift) / 1e6;
+        }
+        
+        //a csf spectrum is always generated
+        ColumnVector Mzcsf(wvec); 
+        Mz_spectrum(Mzcsf, wvec, w1, tsatvec, M0csf, wimat_csf, kij_csf, T12csf);
+        
+        if (tissuepvval(1) >= PV_THRESHOLD){
+            result = Mztissue.operator *(tissuepvval)+ Mzcsf.operator *(1.0-tissuepvval);
+        } else{
+            result = Mzcsf;
+        }
+        //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
     }
 
     // extra pools
