@@ -725,7 +725,7 @@ void CESTFwdModel::Evaluate(
         for (int j = 1; j <= nsamp; j++) {
             wimat_csf(1, j) = wlam * (ppmvec(1)+(j - 1) * drift) / 1e6;
         }
-        
+
         //a csf spectrum is always generated
         ColumnVector Mzcsf(wvec); 
         Mz_spectrum(Mzcsf, wvec, w1, tsatvec, M0csf, wimat_csf, kij_csf, T12csf);
@@ -1001,6 +1001,13 @@ void CESTFwdModel::NameParams(vector<string> &names) const
             names.push_back("T2" + lettervec[i - 1]);
         }
     }
+
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    //Names of additional PV paramters
+    names.push_back("T1csf");
+    names.push_back("T2csf");
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
     if (nexpool > 0)
     {
         for (int i = 1; i <= nexpool; i++)
