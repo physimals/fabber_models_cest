@@ -39,7 +39,7 @@ void CESTFwdModel::GetOptions(vector<OptionSpec> &opts) const
 
 std::string CESTFwdModel::GetDescription() const
 {
-    return "Model for Chemical Exchange Saturation transfer";
+    return "Model for Chemical Exchange Saturation transfer, with correction for partial volume effects using a tissue partial volume estimate map via --suppdata option";
 }
 
 string CESTFwdModel::ModelVersion() const
