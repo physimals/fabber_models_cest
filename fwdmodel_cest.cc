@@ -27,6 +27,12 @@ static OptionSpec OPTIONS[] = {
     { "inferdrift", OPT_BOOL, "Infer drift parameter", OPT_NONREQ, "" },
     { "lorentz", OPT_BOOL, "Alternative solution to Bloch equations", OPT_NONREQ, "" },
     { "steadystate", OPT_BOOL, "Steady state", OPT_NONREQ, "" },
+    { "pvimg", OPT_IMAGE,
+        "Tissue partial volume image. Should be 3D image containing tissue partial volumes, i.e. sum of GM and WM "
+        "partial volumes",
+        OPT_NONREQ, "" },
+    { "pv-threshold", OPT_FLOAT, "Partial volume threshold for including tissue contribution", OPT_NONREQ, "0.5" },
+    { "csf-tiss-m0ratio", OPT_FLOAT, "Used for fixing CSF M0", OPT_NONREQ, "0.5269" },
     { "" },
 };
 
@@ -41,7 +47,7 @@ void CESTFwdModel::GetOptions(vector<OptionSpec> &opts) const
 std::string CESTFwdModel::GetDescription() const
 {
     return "Model for Chemical Exchange Saturation transfer, with correction for partial volume effects using a tissue "
-           "partial volume estimate map via --suppdata option";
+           "PV map";
 }
 
 string CESTFwdModel::ModelVersion() const
@@ -130,37 +136,6 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) con
         place++;
     }
 
-    /*
-     int idx = 10; //should be next entry in priors
-     if (pvcorr) {
-       // M0
-       prior.means(idx) = 0.0;
-       prior.means(idx+1) = 0.0;
-       prior.means(idx+2) = 0.15;
-
-       precisions(idx,idx) = 1e-12;
-       precisions(idx+1,idx+1) = 100;
-       precisions(idx+2,idx+2) = 2500;
-
-       // exchnage consts (these are log_e)
-       prior.means(idx+3) = 3;
-       precisions(idx+3,idx+3) = 1;
-       prior.means(idx+4) = 3.7;
-       precisions(idx+4,idx+4) = 1;
-
-       prior.means(idx+5) = 0.0;
-       precisions(idx+5,idx+5) = 1e-12;
-
-       prior.means(idx+6) = 1.0;
-       precisions(idx+6,idx+6) = 1e12;
-       prior.means(idx+7) = 0.0;
-       precisions(idx+7,idx+7) = 1e12;
-       prior.means(idx+8) = 0.0;
-       precisions(idx+8,idx+8) = 1e12;
-       idx += 9;
-     }
-     */
-
     if (t12soft)
     {
         // T1 values
@@ -183,15 +158,16 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) con
         }
     }
 
-    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    // CSF pool T1 and T2 priors
-    prior.means(place) = 1.9;
-    precisions(place, place) = 44.4;
-    place++;
-    prior.means(place) = 0.25;
-    precisions(place, place) = 1 / std::pow(prior.means(place) / 5, 2);
-    place++;
-    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    if (use_pvcorr)
+    {
+        // CSF pool T1 and T2 priors
+        prior.means(place) = 1.9;
+        precisions(place, place) = 44.4;
+        place++;
+        prior.means(place) = 0.25;
+        precisions(place, place) = 1 / std::pow(prior.means(place) / 5, 2);
+        place++;
+    }
 
     // Extra ('indepdnent') pools
     if (nexpool > 0)
@@ -421,16 +397,6 @@ void CESTFwdModel::RestrictPools(ColumnVector &M0, Matrix &wimat, Matrix &kij, M
 
 void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, int restrict_pool) const
 {
-    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    // Don't fit voxels < 50% tissue. Still must be masked in in order to have the default value
-    float PV_THRESHOLD = 0.50;
-    ColumnVector tissuepvval(1);
-    tissuepvval = this->suppdata;
-
-    // Used for fixing CSF MO
-    const float CSF_TISS_M0RATIO = 0.5269;
-    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
     // ensure that values are reasonable
     // negative check
     ColumnVector paramcpy = params;
@@ -505,70 +471,6 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
         place++;
     }
 
-    /*
-    // PV correction section (untested)
-    ColumnVector M0_WM(npool);
-    Matrix kij_WM(npool,npool);
-    Matrix T12_WM(2,npool);
-    Matrix T12_CSF(2,1);
-    Matrix M0_CSF(1,1);
-    float PV_GM;
-    float PV_WM;
-    float PV_CSF;
-    if (pvcorr)
-      {
-
-    // now parameters for WM
-    M0_WM(1) = paramcpy(place); // this is the M0 value of water
-    if (M0_WM(1)<1e-4) M0_WM(1)=1e-4; //M0 of water cannot disapear all together
-    place++;
-    // this code here if parameters contains actual M0 values
-    //M0.Rows(2,npool) = paramcpy.Rows(place,place+npool-1-1);
-    // place +=npool-1;
-
-    // values in the parameters are ratios of M0_water
-    float M0WMratio;
-    for (int j=2; j<=npool; j++) {
-      M0WMratio = paramcpy(place);
-      if (M0WMratio > 0.1) { //dont expect large ratios
-        M0WMratio = 0.1;
-      }
-      M0_WM(j) = M0WMratio*M0_WM(1);
-
-      place++;
-    }
-
-    // now exchange - we assume that only significant exchnage occurs with water
-    kij_WM=0.0; //float ktemp;
-    for (int j=2; j<=npool; j++) {
-      //ktemp = exp(params(place)); //this is the 'fundamental rate const - non-linear
-    transformation
-      //kij(j,1) = ktemp*M0(1);
-      //kij(1,j) = ktemp*M0(j);
-      kij_WM(j,1) = exp(params(place));  //non-linear transformation
-      kij_WM(1,j) =kij_WM(j,1)*M0_WM(j)/M0_WM(1);
-
-      place++;
-    }
-
-      // CSF
-      M0_CSF = paramcpy(place);
-      place++;
-
-      //partial volume estimates
-      PV_GM = paramcpy(place);
-      place++;
-      PV_WM = paramcpy(place);
-      place++;
-      PV_CSF = paramcpy(place);
-      place++;
-
-      //T12 fixed
-      T12_WM = T12WMmaster;
-      T12_CSF = T12CSFmaster;
-      }
-    */
-
     // T12 parameter values
     if (t12soft)
     {
@@ -596,6 +498,14 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
     else
     {
         T12 = T12master;
+    }
+
+    // PVC parameters
+    double t1csf, t2csf;
+    if (use_pvcorr)
+    {
+        t1csf = paramcpy(place++);
+        t2csf = paramcpy(place++);
     }
 
     // Extra pools
@@ -658,19 +568,6 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
         }
     }
 
-    /*
-     if (pvcorr) {
-       ColumnVector GM_result;
-       GM_result = Mz_spectrum(wvec[n],w1,t[n],M0,wi,kij,T12);
-       ColumnVector WM_result;
-       WM_result = Mz_spectrum(wvec[n],w1,t[n],M0_WM,wi,kij_WM,T12_WM);
-       ColumnVector CSF_result;
-       CSF_result = Mz_spectrum(wvec[n],w1,t[n],M0_CSF,wi.Row(1),kij.SubMatrix(1,1,1,1),T12_CSF);
-
-       thisresult = PV_GM*GM_result + PV_WM*WM_result + PV_CSF*CSF_result;
-     }
-   */
-
     if (restrict_pool > 0)
     {
         // We are restriction the solution to the water pool + possibly one other pool
@@ -678,11 +575,16 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
     }
     else
     {
-        //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-        // Generate tissue z spectrum if pv ~= 0 (otherwise we're doing csf-only fit)
+        float pv_val = 1.0;
+        if (use_pvcorr)
+        {
+            pv_val = tissue_pv(voxel);
+        }
+
+        // Generate tissue z spectrum if pv > threshold (otherwise we're doing csf-only fit)
         ColumnVector Mztissue(wvec);
 
-        if (tissuepvval(1) >= PV_THRESHOLD)
+        if (pv_val >= pv_threshold)
         {
             // PV correction supports lorentz option for 'tissue' spectrum
             if (lorentz)
@@ -696,42 +598,46 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
             }
         }
 
-        // Now repeat but for one pool to get CSF Lorentzian
-        ColumnVector M0csf(1);
-        M0csf(1) = M0(1) * CSF_TISS_M0RATIO;
-
-        if (M0csf(1) < 1e-4)
+        if (use_pvcorr)
         {
-            M0csf(1) = 1e-4;
-        }
+            // Now repeat but for one pool to get CSF Lorentzian
+            ColumnVector M0csf(1);
+            M0csf(1) = M0(1) * csf_tiss_m0ratio;
 
-        Matrix T12csf(2, 1);
-        T12csf(1, 1) = paramcpy(place);
-        place++;
-        T12csf(2, 1) = paramcpy(place);
-        place++;
-        Matrix kij_csf(1, 1);
-        kij_csf(1, 1) = 0.0;
+            if (M0csf(1) < 1e-4)
+            {
+                M0csf(1) = 1e-4;
+            }
 
-        Matrix wimat_csf(1, nsamp);
-        for (int j = 1; j <= nsamp; j++)
-        {
-            wimat_csf(1, j) = wlam * (ppmvec(1) + (j - 1) * drift) / 1e6;
-        }
+            Matrix T12csf(2, 1);
+            T12csf(1, 1) = t1csf;
+            T12csf(2, 1) = t2csf;
+            Matrix kij_csf(1, 1);
+            kij_csf(1, 1) = 0.0;
 
-        // a csf spectrum is always generated
-        ColumnVector Mzcsf(wvec);
-        Mz_spectrum(Mzcsf, wvec, w1, tsatvec, M0csf, wimat_csf, kij_csf, T12csf);
+            Matrix wimat_csf(1, nsamp);
+            for (int j = 1; j <= nsamp; j++)
+            {
+                wimat_csf(1, j) = wlam * (ppmvec(1) + (j - 1) * drift) / 1e6;
+            }
 
-        if (tissuepvval(1) >= PV_THRESHOLD)
-        {
-            result = Mztissue.operator*(tissuepvval) + Mzcsf.operator*(1.0 - tissuepvval);
+            // a csf spectrum is always generated
+            ColumnVector Mzcsf(wvec);
+            Mz_spectrum(Mzcsf, wvec, w1, tsatvec, M0csf, wimat_csf, kij_csf, T12csf);
+
+            if (pv_val >= pv_threshold)
+            {
+                result = Mztissue * pv_val + Mzcsf * (1.0 - pv_val);
+            }
+            else
+            {
+                result = Mzcsf;
+            }
         }
         else
         {
-            result = Mzcsf;
+            result = Mztissue;
         }
-        //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
     }
 
     // extra pools
@@ -758,54 +664,43 @@ FwdModel *CESTFwdModel::NewInstance()
 
 void CESTFwdModel::Initialize(ArgsType &args)
 {
-    string scanParams = args.ReadWithDefault("scan-params", "cmdline");
-
-    // matrix containing spec for each datapoint
-    // 3 Columns: Freq (ppm), B1 (T), tsat (s)
+    // Matrix containing spec for each datapoint
+    // 3 columns: Freq (ppm), B1 (T), tsat (s)
     // Nrows = number data points
     Matrix dataspec;
 
-    // matrix containing setup information for the pools
-    //  columns: res. freq (rel. to water) (ppm), rate (species-> water), T1, T2.
-    // 1st row is water, col 1 will be interpreted as the actaul centre freq of water if value is
-    // >0, col 2 will be ignored.
+    // Matrix containing setup information for the pools
+    // 4 columns: res. freq (rel. to water) (ppm), rate (species-> water), T1, T2.
+    // 1st row is water, col 1 interpreted as the actaul centre freq of water if > 0, col 2 ignored.
     // Further rows for pools to be modelled.
     Matrix poolmat;
 
-    Matrix expoolmat; // Matrix for the 'extra' pools
+    // Matrix for the 'extra' pools
+    Matrix expoolmat;
 
     string expoolmatfile;
     string pulsematfile;
 
     t12soft = false;
-    // pvcorr=false;
 
-    if (scanParams == "cmdline")
-    {
-        // read data specification from file
-        dataspec = read_ascii_matrix(args.Read("spec"));
+    // read data specification from file
+    dataspec = read_ascii_matrix(args.Read("spec"));
 
-        // read pool specification from file
-        poolmat = read_ascii_matrix(args.Read("pools"));
+    // read pool specification from file
+    poolmat = read_ascii_matrix(args.Read("pools"));
 
-        // read extra pool specification from file
-        expoolmatfile = args.ReadWithDefault("expools", "none");
+    // read extra pool specification from file
+    expoolmatfile = args.ReadWithDefault("expools", "none");
 
-        // read pulsed saturation specification
-        pulsematfile = args.ReadWithDefault("ptrain", "none");
+    // read pulsed saturation specification
+    pulsematfile = args.ReadWithDefault("ptrain", "none");
 
-        // basic  = args.ReadBool("basic");
-        //      pvcorr = args.ReadBool("pvcorr");
-        t12soft = args.ReadBool("t12prior");
-        inferdrift = args.ReadBool("inferdrift");
+    t12soft = args.ReadBool("t12prior");
+    inferdrift = args.ReadBool("inferdrift");
 
-        // alternatives to Matrix exponential solution to Bloch equations
-        lorentz = args.ReadBool("lorentz"); // NB only compatible with single pool
-        steadystate = args.ReadBool("steadystate");
-    }
-
-    else
-        throw invalid_argument("Only --scan-params=cmdline is accepted at the moment");
+    // alternatives to Matrix exponential solution to Bloch equations
+    lorentz = args.ReadBool("lorentz"); // NB only compatible with single pool
+    steadystate = args.ReadBool("steadystate");
 
     // Deal with the specification of the pools
     npool = poolmat.Nrows();
@@ -934,6 +829,28 @@ void CESTFwdModel::Initialize(ArgsType &args)
         LOG << " Magnitudes (relative): " << pmagvec.t() << endl;
         LOG << " Durations (s): " << ptvec.t() << endl;
     }
+
+    // Partial volume correction
+    try
+    {
+        // Partial volume image should be 3D map
+        Matrix pvimg = args.GetVoxelData("pvimg");
+        LOG << "Tissue partial volume image found - using partial volume correction" << endl;
+        use_pvcorr = true;
+        if (pvimg.Nrows() > 1)
+        {
+            throw InvalidOptionValue("pvimg", "4D data set", "3D data set");
+        }
+        tissue_pv = pvimg.Row(1).t();
+
+        pv_threshold = args.GetDoubleDefault("pv-threshold", 0.5, 0, 1);
+        csf_tiss_m0ratio = args.GetDoubleDefault("csf-tiss-m0ratio", 0.5269);
+    }
+    catch (DataNotFound &e)
+    {
+        use_pvcorr = false;
+        LOG << "Tissue partial volume image not found - will not use partial volume correction" << endl;
+    }
 }
 
 void CESTFwdModel::DumpParameters(const ColumnVector &vec, const string &indent) const
@@ -977,14 +894,7 @@ void CESTFwdModel::NameParams(vector<string> &names) const
     {
         names.push_back("drift");
     }
-    /*  if (pvcorr) {
-    names.push_back("WM_M0a");
-    names.push_back("WM_M0b_r");
-    names.push_back("WM_M0c_r");
-    names.push_back("WM_kba");
-    names.push_back("WM_kca");
-    names.push_back("CSF_M0a");
-    }*/
+
     if (t12soft)
     {
         for (int i = 1; i <= npool; i++)
@@ -997,11 +907,12 @@ void CESTFwdModel::NameParams(vector<string> &names) const
         }
     }
 
-    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    // Names of additional PV paramters
-    names.push_back("T1csf");
-    names.push_back("T2csf");
-    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    if (use_pvcorr)
+    {
+        // Additional PV paramters
+        names.push_back("T1csf");
+        names.push_back("T2csf");
+    }
 
     if (nexpool > 0)
     {

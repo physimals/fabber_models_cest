@@ -30,10 +30,8 @@ public:
     virtual void NameParams(vector<string> &names) const;
     virtual int NumParams() const
     {
-        //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-        // Added '+2' to account for the 2 PV correction parameters used in this model (T1csf, T2csf)
-        return (3 * npool - 1) + 1 + (inferdrift ? 1 : 0) + (t12soft ? (2 * npool) : 0) + (3 * nexpool) + 2;
-        //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+        return (3 * npool - 1) + 1 + (inferdrift ? 1 : 0) + (t12soft ? (2 * npool) : 0) + (3 * nexpool)
+            + (use_pvcorr ? 2 : 0);
     }
 
     virtual ~CESTFwdModel()
@@ -121,6 +119,12 @@ protected:
 
     // ard flags
     bool doard;
+
+    // Partial volume correction
+    bool use_pvcorr;
+    NEWMAT::ColumnVector tissue_pv;
+    double pv_threshold;
+    double csf_tiss_m0ratio;
 
 private:
     /** Auto-register with forward model factory. */
