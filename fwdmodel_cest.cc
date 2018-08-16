@@ -26,7 +26,8 @@ static OptionSpec OPTIONS[] = {
     { "t12prior", OPT_BOOL, "Include uncertainty in T1 and T2 values", OPT_NONREQ, "" },
     { "inferdrift", OPT_BOOL, "Infer drift parameter", OPT_NONREQ, "" },
     { "lorentz", OPT_BOOL, "Alternative solution to Bloch equations", OPT_NONREQ, "" },
-    { "steadystate", OPT_BOOL, "Steady state", OPT_NONREQ, "" }, { "" },
+    { "steadystate", OPT_BOOL, "Steady state", OPT_NONREQ, "" },
+    { "" },
 };
 
 void CESTFwdModel::GetOptions(vector<OptionSpec> &opts) const
@@ -39,7 +40,8 @@ void CESTFwdModel::GetOptions(vector<OptionSpec> &opts) const
 
 std::string CESTFwdModel::GetDescription() const
 {
-    return "Model for Chemical Exchange Saturation transfer, with correction for partial volume effects using a tissue partial volume estimate map via --suppdata option";
+    return "Model for Chemical Exchange Saturation transfer, with correction for partial volume effects using a tissue "
+           "partial volume estimate map via --suppdata option";
 }
 
 string CESTFwdModel::ModelVersion() const
@@ -75,8 +77,8 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) con
             if (setconcprior)
             {
                 // priors have been specified via the poolmat
-                prior.means(place) = poolcon(
-                    place - 1); // NB poolcon vec doesn't have water in so entry 1 is pool 2 etc
+                prior.means(place)
+                    = poolcon(place - 1); // NB poolcon vec doesn't have water in so entry 1 is pool 2 etc
                 precisions(place, place) = poolconprec(place - 1);
             }
             else
@@ -182,12 +184,12 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) con
     }
 
     //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    //CSF pool T1 and T2 priors
+    // CSF pool T1 and T2 priors
     prior.means(place) = 1.9;
     precisions(place, place) = 44.4;
     place++;
     prior.means(place) = 0.25;
-    precisions(place,place) = 1/std::pow(prior.means(place)/5, 2);
+    precisions(place, place) = 1 / std::pow(prior.means(place) / 5, 2);
     place++;
     //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
@@ -224,8 +226,10 @@ void CESTFwdModel::InitParams(MVNDist &posterior) const
 {
     // Check out dataspec is the right size
     int nt = data.Nrows();
-    if (wvec.Nrows() != nt) {
-        throw InvalidOptionValue("dataspec", "", "Incorrect number of frequencies - should match number of data volumes");
+    if (wvec.Nrows() != nt)
+    {
+        throw InvalidOptionValue(
+            "dataspec", "", "Incorrect number of frequencies - should match number of data volumes");
     }
 
     // load the existing precisions as the basis for any update
@@ -292,8 +296,7 @@ double lin_interp(const ColumnVector &x, const ColumnVector &y, double pos)
     return y(y.Nrows());
 }
 
-void CESTFwdModel::EvaluateModel(
-    const ColumnVector &params, ColumnVector &result, const std::string &key) const
+void CESTFwdModel::EvaluateModel(const ColumnVector &params, ColumnVector &result, const std::string &key) const
 {
     if (key == "")
     {
@@ -312,27 +315,29 @@ void CESTFwdModel::EvaluateModel(
 void CESTFwdModel::EvaluateCestRstar(const ColumnVector &params, ColumnVector &result, int pool_num) const
 {
     assert(pool_num > 1);
-    //LOG << "Outputting CESTRstar for pool " << pool_num << endl;
-    // For this calculation, we use default T1/T2, NOT any inferred values or 
+    // LOG << "Outputting CESTRstar for pool " << pool_num << endl;
+    // For this calculation, we use default T1/T2, NOT any inferred values or
     // image priors
     ColumnVector mod_params = params;
-    if (t12soft) {
-        int t12_idx = (npool-1)*3 + 3 + (inferdrift ? 1 : 0);
-        for (int i=1; i<=npool; i++) {
-            mod_params(t12_idx+i) = T12master(1, i);
-            mod_params(t12_idx+npool+i) = T12master(2, i);
+    if (t12soft)
+    {
+        int t12_idx = (npool - 1) * 3 + 3 + (inferdrift ? 1 : 0);
+        for (int i = 1; i <= npool; i++)
+        {
+            mod_params(t12_idx + i) = T12master(1, i);
+            mod_params(t12_idx + npool + i) = T12master(2, i);
         }
     }
     // We also do not use a water ppm offset
-    int ppm_off_idx = (npool-1)*2 + 2;
+    int ppm_off_idx = (npool - 1) * 2 + 2;
     mod_params(ppm_off_idx) = 0;
 
     ColumnVector water_only, with_pool;
     Evaluate(mod_params, water_only, 1);
     Evaluate(mod_params, with_pool, pool_num);
-    //LOG << "freq: " << wvec.t();
-    //LOG << "water only: " << water_only.t();
-    //LOG << "With pool: " << with_pool.t();
+    // LOG << "freq: " << wvec.t();
+    // LOG << "water only: " << water_only.t();
+    // LOG << "With pool: " << with_pool.t();
     // We evaluate the spectrum at a fixed PPM from the poolmat file, unless
     // the value is 0 in which case we use 50ppm (works for semisolid pool)
     double ppm_eval = 50;
@@ -340,17 +345,17 @@ void CESTFwdModel::EvaluateCestRstar(const ColumnVector &params, ColumnVector &r
     {
         ppm_eval = poolppm(pool_num - 1);
     }
-    //LOG << "Evaluating at " << ppm_eval << ", " << (ppm_eval* wlam / 1e6) << endl;
+    // LOG << "Evaluating at " << ppm_eval << ", " << (ppm_eval* wlam / 1e6) << endl;
     // Evaluate at fixed PPM by linear interpolation. Note freq transformation
     // same as transformation applied to wvec
     double water = lin_interp(wvec, water_only, ppm_eval * wlam / 1e6);
     double pool = lin_interp(wvec, with_pool, ppm_eval * wlam / 1e6);
-    //LOG << "water " << water << endl;
-    //LOG << "pool " << pool << endl;
-    //LOG << "frac " << pool/water << endl;
+    // LOG << "water " << water << endl;
+    // LOG << "pool " << pool << endl;
+    // LOG << "frac " << pool/water << endl;
     result.ReSize(1);
     result(1) = 100 * (water - pool) / params(1);
-    //LOG << "res " << result.t() << endl;
+    // LOG << "res " << result.t() << endl;
 }
 
 /**
@@ -414,17 +419,15 @@ void CESTFwdModel::RestrictPools(ColumnVector &M0, Matrix &wimat, Matrix &kij, M
     }
 }
 
-void CESTFwdModel::Evaluate(
-    const ColumnVector &params, ColumnVector &result, int restrict_pool) const
+void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, int restrict_pool) const
 {
-
     //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    //Don't fit voxels < 50% tissue. Still must be masked in in order to have the default value
+    // Don't fit voxels < 50% tissue. Still must be masked in in order to have the default value
     float PV_THRESHOLD = 0.50;
     ColumnVector tissuepvval(1);
     tissuepvval = this->suppdata;
 
-    //Used for fixing CSF MO
+    // Used for fixing CSF MO
     const float CSF_TISS_M0RATIO = 0.5269;
     //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
@@ -625,8 +628,8 @@ void CESTFwdModel::Evaluate(
         {
             for (int j = 1; j <= nsamp; j++)
             {
-                wimat(i, j) = wlam * ppmvec(i) / 1e6
-                    + wlam * (ppmvec(1) + (j - 1) * drift) / 1e6 * (1 + ppmvec(i) / 1e6);
+                wimat(i, j)
+                    = wlam * ppmvec(i) / 1e6 + wlam * (ppmvec(1) + (j - 1) * drift) / 1e6 * (1 + ppmvec(i) / 1e6);
             }
         }
     }
@@ -649,8 +652,8 @@ void CESTFwdModel::Evaluate(
         {
             for (int j = 1; j <= nsamp; j++)
             {
-                exwimat(i, j) = wlam * ppmvec(i) / 1e6
-                    + wlam * (ppmvec(1) + (j - 1) * drift) / 1e6 * (1 + exppmvec(i) / 1e6);
+                exwimat(i, j)
+                    = wlam * ppmvec(i) / 1e6 + wlam * (ppmvec(1) + (j - 1) * drift) / 1e6 * (1 + exppmvec(i) / 1e6);
             }
         }
     }
@@ -676,23 +679,24 @@ void CESTFwdModel::Evaluate(
     else
     {
         //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-        //Generate tissue z spectrum if pv ~= 0 (otherwise we're doing csf-only fit)
+        // Generate tissue z spectrum if pv ~= 0 (otherwise we're doing csf-only fit)
         ColumnVector Mztissue(wvec);
 
-        if (tissuepvval(1) >= PV_THRESHOLD){
-            //PV correction supports lorentz option for 'tissue' spectrum
+        if (tissuepvval(1) >= PV_THRESHOLD)
+        {
+            // PV correction supports lorentz option for 'tissue' spectrum
             if (lorentz)
             {
                 Mztissue = Mz_spectrum_lorentz(wvec, w1, tsatvec, M0, wimat, kij, T12);
             }
             else
             {
-                //The complete tissue spectrum
+                // The complete tissue spectrum
                 Mz_spectrum(Mztissue, wvec, w1, tsatvec, M0, wimat, kij, T12);
             }
         }
 
-        //Now repeat but for one pool to get CSF Lorentzian
+        // Now repeat but for one pool to get CSF Lorentzian
         ColumnVector M0csf(1);
         M0csf(1) = M0(1) * CSF_TISS_M0RATIO;
 
@@ -701,26 +705,30 @@ void CESTFwdModel::Evaluate(
             M0csf(1) = 1e-4;
         }
 
-        Matrix T12csf(2,1);
-        T12csf(1,1) = paramcpy(place);
+        Matrix T12csf(2, 1);
+        T12csf(1, 1) = paramcpy(place);
         place++;
-        T12csf(2,1) = paramcpy(place);
+        T12csf(2, 1) = paramcpy(place);
         place++;
-        Matrix kij_csf(1,1);
-        kij_csf(1,1) = 0.0;
-        
-        Matrix wimat_csf(1,nsamp);
-        for (int j = 1; j <= nsamp; j++) {
-            wimat_csf(1, j) = wlam * (ppmvec(1)+(j - 1) * drift) / 1e6;
+        Matrix kij_csf(1, 1);
+        kij_csf(1, 1) = 0.0;
+
+        Matrix wimat_csf(1, nsamp);
+        for (int j = 1; j <= nsamp; j++)
+        {
+            wimat_csf(1, j) = wlam * (ppmvec(1) + (j - 1) * drift) / 1e6;
         }
 
-        //a csf spectrum is always generated
-        ColumnVector Mzcsf(wvec); 
+        // a csf spectrum is always generated
+        ColumnVector Mzcsf(wvec);
         Mz_spectrum(Mzcsf, wvec, w1, tsatvec, M0csf, wimat_csf, kij_csf, T12csf);
-        
-        if (tissuepvval(1) >= PV_THRESHOLD){
-            result = Mztissue.operator *(tissuepvval)+ Mzcsf.operator *(1.0-tissuepvval);
-        } else{
+
+        if (tissuepvval(1) >= PV_THRESHOLD)
+        {
+            result = Mztissue.operator*(tissuepvval) + Mzcsf.operator*(1.0 - tissuepvval);
+        }
+        else
+        {
             result = Mzcsf;
         }
         //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -735,8 +743,7 @@ void CESTFwdModel::Evaluate(
     {
         for (int i = 1; i <= nexpool; i++)
         {
-            Mz_contribution_lorentz_simple(
-                Mzc, wvec, exI(i), (exwimat.SubMatrix(i, i, 1, nsamp)).t(), exR(i));
+            Mz_contribution_lorentz_simple(Mzc, wvec, exI(i), (exwimat.SubMatrix(i, i, 1, nsamp)).t(), exR(i));
             Mz_extrapools += Mzc;
         }
     }
@@ -939,8 +946,8 @@ void CESTFwdModel::NameParams(vector<string> &names) const
     names.clear();
 
     // name the parameters for the pools using letters
-    string lettervec[] = { "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n",
-        "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z" };
+    string lettervec[] = { "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r",
+        "s", "t", "u", "v", "w", "x", "y", "z" };
 
     names.push_back("M0a");
     if (npool > 1)
@@ -991,7 +998,7 @@ void CESTFwdModel::NameParams(vector<string> &names) const
     }
 
     //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    //Names of additional PV paramters
+    // Names of additional PV paramters
     names.push_back("T1csf");
     names.push_back("T2csf");
     //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1053,8 +1060,8 @@ ReturnMatrix CESTFwdModel::expm_pade(Matrix inmatrix) const
 
     int metflag = 0;
     int mvals[5] = { 3, 5, 7, 9, 13 };
-    float thetam[5] = { 1.495585217958292e-002, 2.539398330063230e-001, 9.504178996162932e-001,
-        2.097847961257068e+000, 5.371920351148152e+000 };
+    float thetam[5] = { 1.495585217958292e-002, 2.539398330063230e-001, 9.504178996162932e-001, 2.097847961257068e+000,
+        5.371920351148152e+000 };
     int i = 0;
 
     while (metflag < 1)
@@ -1129,10 +1136,11 @@ ReturnMatrix CESTFwdModel::PadeApproximant(Matrix inmatrix, int m) const
         A2 = inmatrix * inmatrix;
         A4 = A2 * A2;
         A6 = A2 * A4;
-        U = inmatrix * (A6 * (coeff(14) * A6 + coeff(12) * A4 + coeff(10) * A2) + coeff(8) * A6
-                           + coeff(6) * A4 + coeff(4) * A2 + coeff(2) * I);
-        V = A6 * (coeff(13) * A6 + coeff(11) * A4 + coeff(9) * A2) + coeff(7) * A6 + coeff(5) * A4
-            + coeff(3) * A2 + coeff(1) * I;
+        U = inmatrix
+            * (A6 * (coeff(14) * A6 + coeff(12) * A4 + coeff(10) * A2) + coeff(8) * A6 + coeff(6) * A4 + coeff(4) * A2
+                  + coeff(2) * I);
+        V = A6 * (coeff(13) * A6 + coeff(11) * A4 + coeff(9) * A2) + coeff(7) * A6 + coeff(5) * A4 + coeff(3) * A2
+            + coeff(1) * I;
         X = (U + V) * (-U + V).i();
         break;
     }
@@ -1157,21 +1165,20 @@ ReturnMatrix CESTFwdModel::PadeCoeffs(int m) const
         C << 17297280 << 8648640 << 1995840 << 277200 << 25200 << 1512 << 56 << 1;
         break;
     case 9:
-        C << 1.7643225600e10 << 8.821612800e9 << 2.075673600e9 << 3.02702400e8 << 30270240
-          << 2162160 << 110880 << 3960 << 90 << 1;
+        C << 1.7643225600e10 << 8.821612800e9 << 2.075673600e9 << 3.02702400e8 << 30270240 << 2162160 << 110880 << 3960
+          << 90 << 1;
         break;
     case 13:
-        C << 6.4764752532480000e16 << 3.2382376266240000e16 << 7.771770303897600e15
-          << 1.187353796428800e15 << 1.29060195264000e14 << 1.0559470521600e13 << 6.70442572800e11
-          << 3.3522128640e10 << 1323241920 << 40840800 << 960960 << 16380 << 182 << 1;
+        C << 6.4764752532480000e16 << 3.2382376266240000e16 << 7.771770303897600e15 << 1.187353796428800e15
+          << 1.29060195264000e14 << 1.0559470521600e13 << 6.70442572800e11 << 3.3522128640e10 << 1323241920 << 40840800
+          << 960960 << 16380 << 182 << 1;
         break;
     }
     return C;
 }
 
 void CESTFwdModel::Mz_spectrum(ColumnVector &Mz, const ColumnVector &wvec, const ColumnVector &w1,
-    const ColumnVector &t, const ColumnVector &M0, const Matrix &wi, const Matrix &kij,
-    const Matrix &T12) const
+    const ColumnVector &t, const ColumnVector &M0, const Matrix &wi, const Matrix &kij, const Matrix &T12) const
 {
     int nfreq = wvec.Nrows();
     int mpool = M0.Nrows();
@@ -1187,7 +1194,7 @@ void CESTFwdModel::Mz_spectrum(ColumnVector &Mz, const ColumnVector &wvec, const
         k1i(i) = 1 / T12(1, i) + (kij.Row(i)).Sum();
         k2i(i) = 1 / T12(2, i) + (kij.Row(i)).Sum();
     }
-    
+
     // first population of A (with w=0)
     Matrix A(mpool * 3, mpool * 3);
     A = 0.0;
@@ -1357,9 +1364,8 @@ void CESTFwdModel::Mz_spectrum(ColumnVector &Mz, const ColumnVector &wvec, const
  * Analytic *steady state* solution to the *one pool* Bloch equations
  * NB t is ignored becasue it is steady state
  */
-ReturnMatrix CESTFwdModel::Mz_spectrum_lorentz(const ColumnVector &wvec, const ColumnVector &w1,
-    const ColumnVector &t, const ColumnVector &M0, const Matrix &wi, const Matrix &kij,
-    const Matrix &T12) const
+ReturnMatrix CESTFwdModel::Mz_spectrum_lorentz(const ColumnVector &wvec, const ColumnVector &w1, const ColumnVector &t,
+    const ColumnVector &M0, const Matrix &wi, const Matrix &kij, const Matrix &T12) const
 {
     int nfreq = wvec.Nrows();
 
@@ -1371,8 +1377,7 @@ ReturnMatrix CESTFwdModel::Mz_spectrum_lorentz(const ColumnVector &wvec, const C
     for (int k = 1; k <= nfreq; k++)
     {
         delw = wi(1, k) - wvec(k);
-        result(k) = (M0(1) * R1 * (R2 * R2 + delw * delw))
-            / (R1 * (R2 * R2 + delw * delw) + w1(k) * w1(k) * R2);
+        result(k) = (M0(1) * R1 * (R2 * R2 + delw * delw)) / (R1 * (R2 * R2 + delw * delw) + w1(k) * w1(k) * R2);
     }
 
     return result;
@@ -1402,9 +1407,7 @@ void CESTFwdModel::Ainverse(const Matrix A, RowVector &Ai) const
     }
 
     Matrix ABDCi(3, 3);
-    ABDCi = (A.SubMatrix(1, 3, 1, 3)
-                - A.SubMatrix(1, 3, 4, npool * 3) * DDi * A.SubMatrix(4, npool * 3, 1, 3))
-                .i();
+    ABDCi = (A.SubMatrix(1, 3, 1, 3) - A.SubMatrix(1, 3, 4, npool * 3) * DDi * A.SubMatrix(4, npool * 3, 1, 3)).i();
 
     Ai.Columns(1, 3) = ABDCi.Row(3);
     Matrix UR;
@@ -1417,8 +1420,8 @@ void CESTFwdModel::Ainverse(const Matrix A, RowVector &Ai) const
  * A simply parameterised Lorentzian (represeting a single pool solution to the Bloch equation)
  * Following Jones MRM 2012
  */
-void CESTFwdModel::Mz_contribution_lorentz_simple(ColumnVector &Mzc, const ColumnVector &wvec,
-    const double &I, const ColumnVector &wi, const double &R) const
+void CESTFwdModel::Mz_contribution_lorentz_simple(
+    ColumnVector &Mzc, const ColumnVector &wvec, const double &I, const ColumnVector &wi, const double &R) const
 {
     int nfreq = wvec.Nrows();
 

@@ -13,7 +13,7 @@
 
 int main(int argc, char **argv)
 {
-    //add the CEST models - these will autoregister at this point
+    // add the CEST models - these will autoregister at this point
     CESTFwdModel::NewInstance();
 
     return execute(argc, argv);
