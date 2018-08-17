@@ -7,33 +7,34 @@ Copyright (C) 2010-2011 University of Oxford */
 #include "cest_models.h"
 #include "fwdmodel_cest.h"
 
-extern "C" {
-int CALL get_num_models()
+extern "C"
 {
-    return 1;
-}
+    int CALL get_num_models()
+    {
+        return 1;
+    }
 
-const char *CALL get_model_name(int index)
-{
-    switch (index)
+    const char *CALL get_model_name(int index)
     {
-    case 0:
-        return "cest";
-        break;
-    default:
-        return NULL;
+        switch (index)
+        {
+        case 0:
+            return "cest";
+            break;
+        default:
+            return NULL;
+        }
     }
-}
 
-NewInstanceFptr CALL get_new_instance_func(const char *name)
-{
-    if (string(name) == "cest")
+    NewInstanceFptr CALL get_new_instance_func(const char *name)
     {
-        return CESTFwdModel::NewInstance;
+        if (string(name) == "cest")
+        {
+            return CESTFwdModel::NewInstance;
+        }
+        else
+        {
+            return NULL;
+        }
     }
-    else
-    {
-        return NULL;
-    }
-}
 }

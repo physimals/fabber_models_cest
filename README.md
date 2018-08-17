@@ -1,3 +1,23 @@
+# Partial volume correction implementation
+
+This branch corresponds to the CEST model with partial volume correction (PVC)
+implemented. PVC requires that you supply a map of PV estimate (e.g. derived from
+FSL FAST, with values ranging from 0 to 1) in the same resolution as the data.
+The model fits for two additional parameters compared to the standard implementation:
+cerebrospinal fluid (CSF) T1 and T2, which are saved as outputs.
+
+Presently 4 parameters are hardcoded with a bias towards analysis of human data:
+
+T1csf prior mean - CSF pool T1
+
+T2csf prior mean - CSF pool T2
+
+CSF_TISS_M0RATIO - ratio of CSF M0 to tissue M0, based on healthy subjects
+
+PV_THRESHOLD - voxels with a tissue PV below this threshold are treated as CSF-only
+
+Below is information common to both this and the standard CEST model.
+
 # Building the CEST model
 
 The current version of the CEST model is designed to build with the latest 
