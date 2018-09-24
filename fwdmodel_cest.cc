@@ -2295,7 +2295,7 @@ ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& gbInMat, double T2) 
 	}
 	else if (m_lineshape == "Gaussian" || m_lineshape == "gaussian")
 	{
-		ColumnVector g =  (T2/sqrt(2*M_PI))*exp(-gbInMat*gbInMat*T2*T2/2)*1e6;
+		ColumnVector g =  (T2/sqrt(2*M_PI))*exp(-spower_Mat(gbInMat,2)*T2*T2/2)*1e6;
 		return g;
 	}
 	else
