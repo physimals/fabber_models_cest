@@ -584,6 +584,7 @@ void CESTFwdModel::Evaluate(const ColumnVector& params,
 	double ppmoffset = wlam/1e6*ppmvec(1);
 	ColumnVector deltaHz = wvec;
 	deltaHz -= ppmoffset;
+	// cout << ppmvec(1) << endl;
 
 	if (lorentz)
 	{
@@ -2090,6 +2091,8 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(
 	// cout << M0(3) << endl;
 	// cout << M0(1) << endl;
 	// write_ascii_matrix("Mz.txt", Mz);
+	// write_ascii_matrix("Deltas.txt", deltaHz/wlam*1e6);
+	// write_ascii_matrix("gb.txt",gb);
 }
 
 // Function that will raise a matrix to a power Power
@@ -2240,17 +2243,17 @@ ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector& gbInMat, double T2) 
 	{
 
 		
-		// if (deltaHz.MinimumAbsoluteValue() > 750*2*M_PI) // set a little below 1000 Hz in case B0 inhomogeneity causes issues
+		// if (gbInMat.MinimumAbsoluteValue() > 1000*2*M_PI) // set a little below 1000 Hz in case B0 inhomogeneity causes issues
 		// {
 		// 	vector<double> deltas;
-		// 	for (int ii{1}; ii <= deltaHz.Nrows(); ++ii)
+		// 	for (int ii{1}; ii <= gbInMat.Nrows(); ++ii)
 		// 	{
-		// 		deltas.push_back(deltaHz(ii));
+		// 		deltas.push_back(gbInMat(ii));
 		// 	}
 		// 	vector<double> gc = SuperLorentzianGenerator(deltas,T2);
 
-		// 	ColumnVector g(deltaHz);
-		// 	for (int ii{1}; ii <= deltaHz.Nrows(); ++ii)
+		// 	ColumnVector g(gbInMat);
+		// 	for (int ii{1}; ii <= gbInMat.Nrows(); ++ii)
 		// 	{
 		// 		g(ii) = gc.at(ii-1);
 		// 	}
