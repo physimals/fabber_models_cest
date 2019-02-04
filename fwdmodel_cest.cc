@@ -308,11 +308,11 @@ void CESTFwdModel::EvaluateCestRstar(const ColumnVector &params, ColumnVector &r
     int ppm_off_idx = (npool - 1) * 2 + 2;
     mod_params(ppm_off_idx) = 0;
 
+    // LOG << "freq: " << wvec.t();
     ColumnVector water_only, with_pool;
     Evaluate(mod_params, water_only, 1);
-    Evaluate(mod_params, with_pool, pool_num);
-    // LOG << "freq: " << wvec.t();
     // LOG << "water only: " << water_only.t();
+    Evaluate(mod_params, with_pool, pool_num);
     // LOG << "With pool: " << with_pool.t();
     // We evaluate the spectrum at a fixed PPM from the poolmat file, unless
     // the value is 0 in which case we use 50ppm (works for semisolid pool)
@@ -573,71 +573,69 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
         // We are restriction the solution to the water pool + possibly one other pool
         RestrictPools(M0, wimat, kij, T12, restrict_pool);
     }
-    else
+    
+    float pv_val = 1.0;
+    if (use_pvcorr)
     {
-        float pv_val = 1.0;
-        if (use_pvcorr)
+        pv_val = tissue_pv(voxel);
+    }
+
+    // Generate tissue z spectrum if pv > threshold (otherwise we're doing csf-only fit)
+    ColumnVector Mztissue(wvec);
+
+    if (pv_val >= pv_threshold)
+    {
+        // PV correction supports lorentz option for 'tissue' spectrum
+        if (lorentz)
         {
-            pv_val = tissue_pv(voxel);
-        }
-
-        // Generate tissue z spectrum if pv > threshold (otherwise we're doing csf-only fit)
-        ColumnVector Mztissue(wvec);
-
-        if (pv_val >= pv_threshold)
-        {
-            // PV correction supports lorentz option for 'tissue' spectrum
-            if (lorentz)
-            {
-                Mztissue = Mz_spectrum_lorentz(wvec, w1, tsatvec, M0, wimat, kij, T12);
-            }
-            else
-            {
-                // The complete tissue spectrum
-                Mz_spectrum(Mztissue, wvec, w1, tsatvec, M0, wimat, kij, T12);
-            }
-        }
-
-        if (use_pvcorr)
-        {
-            // Now repeat but for one pool to get CSF Lorentzian
-            ColumnVector M0csf(1);
-            M0csf(1) = M0(1) * csf_tiss_m0ratio;
-
-            if (M0csf(1) < 1e-4)
-            {
-                M0csf(1) = 1e-4;
-            }
-
-            Matrix T12csf(2, 1);
-            T12csf(1, 1) = t1csf;
-            T12csf(2, 1) = t2csf;
-            Matrix kij_csf(1, 1);
-            kij_csf(1, 1) = 0.0;
-
-            Matrix wimat_csf(1, nsamp);
-            for (int j = 1; j <= nsamp; j++)
-            {
-                wimat_csf(1, j) = wlam * (ppmvec(1) + (j - 1) * drift) / 1e6;
-            }
-
-            // a csf spectrum is always generated
-            ColumnVector Mzcsf(wvec);
-            Mz_spectrum(Mzcsf, wvec, w1, tsatvec, M0csf, wimat_csf, kij_csf, T12csf);
-
-            if (pv_val >= pv_threshold)
-            {
-                result = Mztissue * pv_val + Mzcsf * (1.0 - pv_val);
-            }
-            else
-            {
-                result = Mzcsf;
-            }
+            Mztissue = Mz_spectrum_lorentz(wvec, w1, tsatvec, M0, wimat, kij, T12);
         }
         else
         {
-            result = Mztissue;
+            // The complete tissue spectrum
+            Mz_spectrum(Mztissue, wvec, w1, tsatvec, M0, wimat, kij, T12);
         }
+    }
+
+    if (use_pvcorr)
+    {
+        // Now repeat but for one pool to get CSF Lorentzian
+        ColumnVector M0csf(1);
+        M0csf(1) = M0(1) * csf_tiss_m0ratio;
+
+        if (M0csf(1) < 1e-4)
+        {
+            M0csf(1) = 1e-4;
+        }
+
+        Matrix T12csf(2, 1);
+        T12csf(1, 1) = t1csf;
+        T12csf(2, 1) = t2csf;
+        Matrix kij_csf(1, 1);
+        kij_csf(1, 1) = 0.0;
+
+        Matrix wimat_csf(1, nsamp);
+        for (int j = 1; j <= nsamp; j++)
+        {
+            wimat_csf(1, j) = wlam * (ppmvec(1) + (j - 1) * drift) / 1e6;
+        }
+
+        // a csf spectrum is always generated
+        ColumnVector Mzcsf(wvec);
+        Mz_spectrum(Mzcsf, wvec, w1, tsatvec, M0csf, wimat_csf, kij_csf, T12csf);
+
+        if (pv_val >= pv_threshold)
+        {
+            result = Mztissue * pv_val + Mzcsf * (1.0 - pv_val);
+        }
+        else
+        {
+            result = Mzcsf;
+        }
+    }
+    else
+    {
+        result = Mztissue;
     }
 
     // extra pools
@@ -707,7 +705,7 @@ void CESTFwdModel::Initialize(ArgsType &args)
     npool = poolmat.Nrows();
     if (poolmat.Ncols() < 4 || poolmat.Ncols() > 6)
     {
-        throw invalid_argument("Incorrect number of columns in pool spefication file");
+        throw invalid_argument("Incorrect number of columns in pool specification file");
     }
     // water centre
     float wdefault = 42.58e6 * 3 * 2 * M_PI; // the default centre freq. (3T)
