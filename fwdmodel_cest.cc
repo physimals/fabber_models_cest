@@ -830,6 +830,7 @@ void CESTFwdModel::Initialize(ArgsType &args)
     }
 
     // Partial volume correction
+    pv_threshold = 0.0;
     try
     {
         // Partial volume image should be 3D map
