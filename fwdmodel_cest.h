@@ -19,7 +19,8 @@ public:
     // Virtual function overrides
     virtual void Initialize(ArgsType &args);
     void GetOutputs(std::vector<std::string> &outputs) const;
-    void EvaluateModel(const NEWMAT::ColumnVector &params, NEWMAT::ColumnVector &result, const std::string &key="") const;
+    void EvaluateModel(
+        const NEWMAT::ColumnVector &params, NEWMAT::ColumnVector &result, const std::string &key = "") const;
 
     virtual string ModelVersion() const;
     virtual void GetOptions(std::vector<OptionSpec> &opts) const;

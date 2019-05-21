@@ -573,7 +573,7 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
         // We are restriction the solution to the water pool + possibly one other pool
         RestrictPools(M0, wimat, kij, T12, restrict_pool);
     }
-    
+
     float pv_val = 1.0;
     if (use_pvcorr)
     {
@@ -647,8 +647,7 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
     {
         for (int i = 1; i <= nexpool; i++)
         {
-            Mz_contribution_lorentz_simple(
-                Mzc, wvec, exI(i), (exwimat.SubMatrix(i, i, 1, nsamp)).t(), exR(i));
+            Mz_contribution_lorentz_simple(Mzc, wvec, exI(i), (exwimat.SubMatrix(i, i, 1, nsamp)).t(), exR(i));
             Mz_extrapools += Mzc;
         }
     }
@@ -1105,7 +1104,7 @@ void CESTFwdModel::Mz_spectrum(ColumnVector &Mz, const ColumnVector &wvec, const
         k1i(i) = 1 / T12(1, i) + (kij.Row(i)).Sum();
         k2i(i) = 1 / T12(2, i) + (kij.Row(i)).Sum();
     }
-    
+
     // first population of A (with w=0)
     Matrix A(mpool * 3, mpool * 3);
     A = 0.0;
@@ -1288,8 +1287,7 @@ ReturnMatrix CESTFwdModel::Mz_spectrum_lorentz(const ColumnVector &wvec, const C
     for (int k = 1; k <= nfreq; k++)
     {
         delw = wi(1, k) - wvec(k);
-        result(k) = (M0(1) * R1 * (R2 * R2 + delw * delw))
-            / (R1 * (R2 * R2 + delw * delw) + w1(k) * w1(k) * R2);
+        result(k) = (M0(1) * R1 * (R2 * R2 + delw * delw)) / (R1 * (R2 * R2 + delw * delw) + w1(k) * w1(k) * R2);
     }
 
     return result;
@@ -1319,9 +1317,7 @@ void CESTFwdModel::Ainverse(const Matrix A, RowVector &Ai) const
     }
 
     Matrix ABDCi(3, 3);
-    ABDCi = (A.SubMatrix(1, 3, 1, 3)
-                - A.SubMatrix(1, 3, 4, npool * 3) * DDi * A.SubMatrix(4, npool * 3, 1, 3))
-                .i();
+    ABDCi = (A.SubMatrix(1, 3, 1, 3) - A.SubMatrix(1, 3, 4, npool * 3) * DDi * A.SubMatrix(4, npool * 3, 1, 3)).i();
 
     Ai.Columns(1, 3) = ABDCi.Row(3);
     Matrix UR;
