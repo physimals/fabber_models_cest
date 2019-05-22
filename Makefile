@@ -8,11 +8,16 @@ USRLDFLAGS = -L${LIB_NEWMAT} -L${LIB_PROB} -L../fabber_core
 FSLVERSION= $(shell cat ${FSLDIR}/etc/fslversion | head -c 1)
 ifeq ($(FSLVERSION), 5) 
   NIFTILIB = -lfslio -lniftiio 
+  MATLIB = -lnewmat
 else 
+  UNAME := $(shell uname -s)
+  ifeq ($(UNAME), Linux)
+    MATLIB = -lopenblas
+  endif
   NIFTILIB = -lNewNifti
 endif
 
-LIBS = -lutils -lnewimage -lmiscmaths -lprob -lnewmat ${NIFTILIB} -lznz -lz -ldl
+LIBS = -lutils -lnewimage -lmiscmaths -lprob ${MATLIB} ${NIFTILIB} -lznz -lz -ldl
 
 XFILES = fabber_cest
 
@@ -20,8 +25,12 @@ XFILES = fabber_cest
 OBJS =  fwdmodel_cest.o spline_interpolator.o
 
 # For debugging:
-OPTFLAGS = -ggdb
-#OPTFLAGS =
+#OPTFLAGS = -ggdb
+
+# Pass Git revision details
+GIT_SHA1:=$(shell git describe --dirty)
+GIT_DATE:=$(shell git log -1 --format=%ad --date=local)
+CXXFLAGS += -DGIT_SHA1=\"${GIT_SHA1}\" -DGIT_DATE="\"${GIT_DATE}\""
 
 # Pass Git revision details
 GIT_SHA1:=$(shell git describe --dirty)

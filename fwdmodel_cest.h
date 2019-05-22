@@ -7,7 +7,6 @@
 /*  CCOPYRIGHT */
 
 #include "fabber_core/fwdmodel.h"
-#include "fabber_core/inference.h"
 
 #include <string>
 using namespace std;
@@ -19,8 +18,10 @@ public:
 
     // Virtual function overrides
     virtual void Initialize(ArgsType &args);
-    virtual void Evaluate(const NEWMAT::ColumnVector &params, NEWMAT::ColumnVector &result) const;
-    virtual vector<string> GetUsage() const;
+    void GetOutputs(std::vector<std::string> &outputs) const;
+    void EvaluateModel(
+        const NEWMAT::ColumnVector &params, NEWMAT::ColumnVector &result, const std::string &key = "") const;
+
     virtual string ModelVersion() const;
     virtual void GetOptions(std::vector<OptionSpec> &opts) const;
     virtual std::string GetDescription() const;
@@ -30,19 +31,24 @@ public:
     virtual void NameParams(vector<string> &names) const;
     virtual int NumParams() const
     {
-        return (3 * npool - 1) + 1 + (inferdrift ? 1 : 0) + (t12soft ? (1 + npool) : 0) + (3 * nexpool);
+        return (3 * npool - 1) + 1 + (inferdrift ? 1 : 0) + (t12soft ? (2 * npool) : 0) + (3 * nexpool)
+            + (use_pvcorr ? 2 : 0);
     }
 
     virtual ~CESTFwdModel()
     {
         return;
     }
-
     virtual void HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) const;
     virtual void InitParams(MVNDist &posterior) const;
 
 protected:
     // specific functions
+
+    void EvaluateCestRstar(const NEWMAT::ColumnVector &params, NEWMAT::ColumnVector &result, int pool_num) const;
+    void RestrictPools(
+        NEWMAT::ColumnVector &M0, NEWMAT::Matrix &wimat, NEWMAT::Matrix &kij, NEWMAT::Matrix &T12, int pool) const;
+    void Evaluate(const NEWMAT::ColumnVector &params, NEWMAT::ColumnVector &result, int restrict_pool = -1) const;
     void Mz_spectrum(NEWMAT::ColumnVector &Mz, const NEWMAT::ColumnVector &wvec, const NEWMAT::ColumnVector &w1,
         const NEWMAT::ColumnVector &t, const NEWMAT::ColumnVector &M0, const NEWMAT::Matrix &wi,
         const NEWMAT::Matrix &kij, const NEWMAT::Matrix &T12) const;
@@ -147,6 +153,12 @@ protected:
 
     // ard flags
     bool doard;
+
+    // Partial volume correction
+    bool use_pvcorr;
+    NEWMAT::ColumnVector tissue_pv;
+    double pv_threshold;
+    double csf_tiss_m0ratio;
 
 private:
     /** Auto-register with forward model factory. */
