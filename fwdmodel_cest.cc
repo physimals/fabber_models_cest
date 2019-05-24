@@ -26,6 +26,7 @@ static OptionSpec OPTIONS[] = {
     { "ptrain", OPT_MATRIX, "ASCII matrix containing pulsed saturation specification", OPT_NONREQ, "" },
     { "t12prior", OPT_BOOL, "Include uncertainty in T1 and T2 values", OPT_NONREQ, "" },
     { "inferdrift", OPT_BOOL, "", OPT_NONREQ, "" },
+    { "b1off", OPT_BOOL, "Compatibility option - infers B1 correction as an offset as in previous versions of model", OPT_NONREQ, "" },
     { "lorentz", OPT_BOOL, "Alternative to Matrix exponential solution to Bloch equations", OPT_NONREQ, "" },
     { "steadystate", OPT_BOOL, "Alternative to Matrix exponential solution to Bloch equations", OPT_NONREQ, "" },
     { "TR", OPT_MATRIX, "TR in seconds", OPT_NONREQ, "" },
@@ -127,9 +128,21 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) con
         }
     }
 
-    // B1corr Correction (fractional)
-    prior.means(place) = 1;
-    precisions(place, place) = 1e99; // 1e20; //1e6;
+    // B1 Correction (fractional)
+    if (use_b1off) 
+    {
+        // Compatibility mode. Note that the high
+        // precision here is probably an error but we
+        // preserve it to give the option of runninng the
+        // model exactly how it used to be
+        prior.means(place) = 0.0;
+        precisions(place, place) = 1e12;
+    }
+    else
+    {
+        prior.means(place) = 1.0;
+        precisions(place, place) = 1;
+    }
     place++;
 
     if (inferdrift)
@@ -462,9 +475,12 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
     place += npool;
 
     // now B1 Correction Factor
-    // Now is a correction factor, is more in line with what is output from scanners
+    // This now a multiplicative factor, more in line with what is output from scanners
     double B1corr = paramcpy(place);
-
+    if (use_b1off) {
+        // Compatibility mode - B1 correction is additive
+        B1corr = (1 + B1corr*1e6);
+    }
     place++;
 
     // Drift
@@ -558,7 +574,7 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
     if (B1corr > 5.0)
         B1corr = 5.0;
     ColumnVector w1 = w1vec * B1corr; // w1 in radians!
-
+    
     // frequencies for the extra pools
     Matrix exwimat(nexpool, nsamp);
     if (nexpool > 0)
@@ -723,6 +739,7 @@ void CESTFwdModel::Initialize(ArgsType &args)
 
     t12soft = args.ReadBool("t12prior");
     inferdrift = args.ReadBool("inferdrift");
+    use_b1off = args.ReadBool("b1off");
 
     // alternatives to Matrix exponential solution to Bloch equations
     lorentz = args.ReadBool("lorentz"); // NB only compatible with single pool
@@ -967,7 +984,12 @@ void CESTFwdModel::NameParams(vector<string> &names) const
             names.push_back("ppm_" + lettervec[i - 1]);
         }
     }
-    names.push_back("B1corr");
+
+    if (use_b1off)
+        names.push_back("B1corr");
+    else
+        names.push_back("B1_off");
+
     if (inferdrift)
     {
         names.push_back("drift");

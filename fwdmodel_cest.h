@@ -96,6 +96,8 @@ protected:
     // flags
     bool t12soft;
     bool inferdrift;
+    bool use_b1off;
+
     // bool pvcorr;
     bool lorentz;
     bool steadystate;
