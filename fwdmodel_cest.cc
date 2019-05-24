@@ -986,9 +986,9 @@ void CESTFwdModel::NameParams(vector<string> &names) const
     }
 
     if (use_b1off)
-        names.push_back("B1corr");
-    else
         names.push_back("B1_off");
+    else
+        names.push_back("B1corr");
 
     if (inferdrift)
     {
