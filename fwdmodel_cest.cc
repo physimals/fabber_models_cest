@@ -249,10 +249,10 @@ void CESTFwdModel::InitParams(MVNDist &posterior) const
     float val;
     val = data.Minimum1(ind);     // find the minimum in the z-spectrum
     val = wvec(ind) * 1e6 / wlam; // frequency of the minimum in ppm
-    if (val > 0.5)
-        val = 0.5; // put a limit on the value
-    if (val < -0.5)
-        val = -0.5;
+    if (val > 1.5)
+        val = 1.5; // put a limit on the value
+    if (val < -1.5)
+        val = -1.5;
     int ppmind = 2 * npool;
     posterior.means(ppmind) = val;
 
