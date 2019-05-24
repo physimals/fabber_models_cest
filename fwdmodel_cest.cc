@@ -1858,10 +1858,10 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(ColumnVector &Mz, // Vector: Magneti
 
     for (int i = 2; i <= mpool - 1; i++)
     {
-        M0i(i * 3) = M0(i);
+        M0i(i * 3) = M0(i) / M0(1);
     }
     M0i(3) = 1.0;
-    M0i((mpool - 1) * 3 + 1) = M0(mpool);
+    M0i((mpool - 1) * 3 + 1) = M0(mpool) / M0(1);
 
     Matrix M((mpool - 1) * 3 + 1, nfreq);
     M = 0.0;
