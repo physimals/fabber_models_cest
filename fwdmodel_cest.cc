@@ -621,15 +621,7 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
             // Only need to fix w1EX if using SS CEST
             double w1EX = m_EXmagMax * B1corr;
 
-            // If only water pool, don't use a lineshape
-            if (m_lineshape == "none" || M0.Nrows() == 1) 
-            {
-                Mz_spectrum_SS(Mztissue, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
-            }
-            else
-            {
-                Mz_spectrum_SS_LineShape(Mztissue, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
-            }
+            Mz_spectrum_SS(Mztissue, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
         }
         else
         {
@@ -1476,255 +1468,6 @@ void CESTFwdModel::Ainverse(const Matrix A, RowVector &Ai) const
 
 // Models the Bloch-McConnell equations based on Listerud, Magn Reson Med 1997; 37: 693–705.
 void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz, // Vector: Magnetization
-    const ColumnVector &wvec,                       // Vector: Saturation Pulse Offset (radians/s = ppm * 42.58*B0*2*pi)
-    const ColumnVector &w1,                         // Vector: B1-corrected Saturation Pulse (radians = uT*42.58*2*pi)
-    const ColumnVector &t,                          // Vector: Number Pulses
-    const ColumnVector &M0,                         // Vector: Pool Sizes
-    const Matrix &wi,                               // Matrix: Pool offsets (radians/s = ppm * 42.58*B0*2*pi)
-    const Matrix &kij, // Matrix: exchange rates for each pool (see below for in depth description)
-    const Matrix &T12, // Matrix: T1's (Row 1) and T2's (Row 2)
-    double w1EX        // Double: B1-corrected Excitation Flip Angle
-    ) const
-{
-    /*********************************************************************
-     * Description of Exchange Rate Matrix
-     *********************************************************************
-     3 Pool for example (Water - f, MT - m, Solute - s)
-          [  0		kfm		kfs ]
-     kij =[  kmf     0		0	]
-          [	 ksf	 0		0	]
-
-
-     *********************************************************************/
-
-    // total number of samples collected
-    int nfreq = wvec.Nrows();
-
-    // Number of Pools to be solved
-    int mpool = M0.Nrows();
-
-    // Create general purpose Identity Matrix;
-    IdentityMatrix Eye(mpool * 3);
-
-    Mz.ReSize(nfreq);
-    Mz = 0.0;
-
-    /**********************************************************************
-     *					Assemble model matrices
-     **********************************************************************/
-
-    // Find Diagonals of Relaxation Matrix
-    ColumnVector k1i(mpool);
-    ColumnVector k2i(mpool);
-    for (int i = 1; i <= mpool; i++)
-    {
-        k1i(i) = 1 / T12(1, i) + (kij.Row(i)).Sum();
-        k2i(i) = 1 / T12(2, i) + (kij.Row(i)).Sum();
-    }
-
-    // Populate Diagonals of Relaxation Matrix
-    Matrix A(mpool * 3, mpool * 3);
-    A = 0.0;
-    int st = 0;
-    for (int i = 1; i <= mpool; i++)
-    {
-        Matrix D(3, 3);
-        D = 0.0;
-        D(1, 1) = -k2i(i);
-        D(2, 2) = -k2i(i);
-        D(3, 3) = -k1i(i);
-        st = (i - 1) * 3;
-        A.SubMatrix(st + 1, st + 3, st + 1, st + 3) = D;
-    }
-
-    // Populate Exchange Parameters of Relaxation Matrix
-    int st2 = 0;
-    IdentityMatrix I(3);
-    for (int i = 1; i <= mpool; i++)
-    {
-        for (int j = 1; j <= mpool; j++)
-        {
-            if (i != j)
-            {
-                st = (i - 1) * 3;
-                st2 = (j - 1) * 3;
-                A.SubMatrix(st + 1, st + 3, st2 + 1, st2 + 3)
-                    = I * kij(j, i); // NB 'reversal' of indices is correct here
-            }
-        }
-    }
-
-    // Find CEST Saturation Train Pause (for Duty Cycle < 1.0) Matrix & Readout Matrix
-
-    double Tr = m_TR;
-    float Tdc = 0;
-    int iNpSeg;
-    if (ptvec.Nrows() == 1)
-    {
-        Tr -= ptvec.Rows(1, ptvec.Nrows()).Sum() * t(1);
-        iNpSeg = 1;
-    }
-    else
-    {
-        Tr -= ptvec.Rows(1, ptvec.Nrows() - 1).Sum() * t(1);
-        Tr -= ptvec(ptvec.Nrows()) * (t(1) - 1);
-
-        // Find CEST Saturation Train Pause (for Duty Cycle < 1.0) Matrix
-        Tdc = ptvec(ptvec.Nrows());
-        iNpSeg = ptvec.Nrows() - 1;
-    }
-
-    Matrix Er = expm(A * Tr);
-    Matrix Edc = expm(A * Tdc);
-
-    // Create Spoiling Matrix Using Square matrix with Transverse elements = 0
-
-    DiagonalMatrix Spoil(mpool * 3);
-    Spoil = 0.0;
-    for (int i = 1; i <= mpool; ++i)
-    {
-        st = i * 3;
-        Spoil(st) = 1.0;
-    }
-
-    DiagonalMatrix iSpoil(Spoil);
-    if (m_InterSpoil)
-    {
-        iSpoil = Spoil;
-    }
-    else
-    {
-        iSpoil = Eye;
-    }
-
-    // Create End of Saturation Pulse Train Spoiling Delay Matrix with arbitrary 3 ms time
-    /* 	NB: This is also the point in time where the magnetization vector, Mz, is solved for.
-        Right after this rest, the magnetization is excited into the XY plane.
-    */
-
-    Matrix Es(mpool * 3, mpool * 3);
-    Es = expm(A * 3e-3);
-
-    // Create Excitation Matrix
-
-    DiagonalMatrix C(mpool * 3);
-    C = 0.0;
-
-    for (int i = 0; i < mpool; i++)
-    {
-        C(3 * i + 1) = sin(w1EX);
-        C(3 * i + 2) = sin(w1EX);
-        C(3 * i + 3) = cos(w1EX);
-    }
-
-    // Create M0i Vector
-
-    ColumnVector M0i(mpool * 3);
-    M0i = 0.0;
-
-    for (int i = 1; i <= mpool; i++)
-    {
-        M0i(i * 3) = M0(i);
-    }
-
-    Matrix M(mpool * 3, nfreq);
-    M = 0.0;
-
-    /**********************************************************************
-     *					Solve for Mz
-     **********************************************************************/
-
-    // Index for No Saturation image, Used for Z-Spectrum normalization at end of function
-    int iNoSat = 0.0;
-
-    for (int k = 1; k <= nfreq; k++)
-    {
-        if (w1(k) == 0.0)
-        {
-            // no saturation image - the z water magnetization is just a normal FLASH sequence
-            Matrix Er0(mpool * 3, mpool * 3);
-            Er0 = expm(A * m_TR);
-            ColumnVector Mz0(mpool * 3);
-            Matrix Er0Temp(mpool * 3, mpool * 3);
-            Er0Temp = (Eye - Spoil * C * Er0);
-            Mz0 = Er0Temp.i() * ((Eye - Er0) * M0i);
-            M(3, k) = Mz0(3);
-
-            iNoSat = k;
-        }
-        else
-        {
-            Matrix Ems(mpool * 3, mpool * 3);
-            Matrix Emt(mpool * 3, mpool * 3);
-
-            for (int jj = 1; jj <= iNpSeg; ++jj)
-            {
-                Matrix W(mpool * 3, mpool * 3);
-                W = 0.0;
-                for (int nn = 1; nn <= mpool; ++nn)
-                {
-                    Matrix Ws(3, 3);
-                    Ws = 0.0;
-                    Ws(2, 1) = (wi(nn, k) - wvec(k));
-                    Ws(1, 2) = -Ws(2, 1);
-                    Ws(3, 2) = w1(k) * pmagvec(jj);
-                    Ws(2, 3) = -Ws(3, 2);
-                    st = (nn - 1) * 3;
-                    W.SubMatrix(st + 1, st + 3, st + 1, st + 3) = Ws;
-                }
-
-                Matrix Em(mpool * 3, mpool * 3);
-
-                Em = expm((A + W) * ptvec(jj));
-
-                if (jj == 1)
-                {
-                    Emt = Em;
-                    Matrix RlW0(mpool * 3, mpool * 3);
-                    RlW0 = A + W;
-                    Ems = (Eye - Em) * RlW0.i();
-                }
-                else
-                {
-                    Emt = Em * Emt;
-                    Matrix RlW0(mpool * 3, mpool * 3);
-                    RlW0 = A + W;
-                    Ems = Em * Ems + (Eye - Em) * RlW0.i();
-                }
-            }
-
-            // Build the Pulse Train
-            Matrix Emdc(Emt);
-            Emdc = mpower(Emt * iSpoil * Edc, t(k) - 1);
-
-            Matrix Emm(Emt);
-            Emm = Eye;
-            Matrix Emb(Emt);
-            Emb = Eye;
-
-            for (int jj = 1; jj < t(k); ++jj)
-            {
-                if (jj == t(k) - 1)
-                    Emb = Emm;
-                Emm += mpower(Emt * iSpoil * Edc, jj);
-            }
-
-            Matrix Mztemp(Emt);
-            Mztemp = Eye - Es * Emdc * Emt * Spoil * Er * C * Spoil;
-
-            M.Column(k) = Mztemp.i()
-                * (Es * Emdc * Emt * Spoil * (Eye - Er) + Es * Emb * Emt * iSpoil * (Eye - Edc) + Eye - Es
-                      + Es * Emm * Ems * A)
-                * M0i;
-        }
-    }
-
-    ColumnVector Mtemp = (M.Row(3)).AsColumn();
-    Mz = abs(Mtemp / Mtemp(iNoSat)) * M0(1);
-}
-
-// Models the Bloch-McConnell equations based on Listerud, Magn Reson Med 1997; 37: 693–705.
-void CESTFwdModel::Mz_spectrum_SS_LineShape(ColumnVector &Mz, // Vector: Magnetization
     const ColumnVector &wvec,    // Vector: Saturation Pulse Offset (radians/s = ppm * 42.58*B0*2*pi)
     const ColumnVector &w1,      // Vector: B1-corrected Saturation Pulse (radians = uT*42.58*2*pi)
     const ColumnVector &nPulses, // Vector: Number Pulses
@@ -1752,8 +1495,17 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(ColumnVector &Mz, // Vector: Magneti
     // Number of Pools to be solved
     int mpool = M0.Nrows();
 
-    // Create general purpose Identity Matrix;
-    IdentityMatrix Eye((mpool - 1) * 3 + 1);
+    // Setting number of rows in Relaxation Matrix
+    int nRelrows;
+    if (m_lineshape == "none" || M0.Nrows() == 1) 
+    {
+        nRelrows = mpool * 3;
+    }
+    else
+    {
+        nRelrows = (mpool - 1) * 3 + 1;
+    }
+    
 
     Mz.ReSize(nfreq);
     Mz = 0.0;
@@ -1761,53 +1513,148 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(ColumnVector &Mz, // Vector: Magneti
     /**********************************************************************
      *					Assemble model matrices
      **********************************************************************/
+    
+    // Create general purpose Identity Matrix;
+    IdentityMatrix Eye(nRelrows);
 
-    // Find Diagonals of Relaxation Matrix
-    ColumnVector k1i(mpool);
-    ColumnVector k2i(mpool);
-    for (int i = 1; i <= mpool; i++)
+    // Initialise all Matrices
+    ColumnVector k1i(mpool); k1i = 0.0;
+    ColumnVector k2i(mpool); k2i = 0.0;
+    Matrix A(nRelrows, nRelrows); A = 0.0;
+    DiagonalMatrix C(nRelrows); C = 0.0;
+    ColumnVector M0i(nRelrows); M0i = 0.0;
+    DiagonalMatrix Spoil(nRelrows); Spoil = 0.0;
+    
+    
+    if (m_lineshape == "none" || M0.Nrows() == 1)
     {
-        k1i(i) = 1 / T12(1, i) + (kij.Row(i)).Sum();
-        k2i(i) = 1 / T12(2, i) + (kij.Row(i)).Sum() - kij(i, mpool);
-    }
-
-    // Populate Diagonals of Relaxation Matrix
-    Matrix A((mpool - 1) * 3 + 1, (mpool - 1) * 3 + 1);
-    A = 0.0;
-    int st = 0;
-    for (int i = 1; i <= mpool - 1; i++)
-    {
-        Matrix D(3, 3);
-        D = 0.0;
-        D(1, 1) = -k2i(i);
-        D(2, 2) = -k2i(i);
-        D(3, 3) = -k1i(i);
-        st = (i - 1) * 3;
-        A.SubMatrix(st + 1, st + 3, st + 1, st + 3) = D;
-    }
-    A((mpool - 1) * 3 + 1, (mpool - 1) * 3 + 1) = -k1i(mpool);
-
-    // Populate Exchange Parameters of Relaxation Matrix
-    int st2 = 0;
-    IdentityMatrix I(3);
-    for (int i = 1; i <= mpool - 1; i++)
-    {
-        for (int j = 1; j <= mpool - 1; j++)
+        // Find Diagonals of Relaxation Matrix
+        for (int i = 1; i <= mpool; i++)
         {
-            if (i != j)
+            k1i(i) = 1 / T12(1, i) + (kij.Row(i)).Sum();
+            k2i(i) = 1 / T12(2, i) + (kij.Row(i)).Sum();
+        }
+        
+        // Populate Diagonals of Relaxation Matrix
+        for (int i = 1; i <= mpool; i++)
+        {
+            Matrix D(3, 3);
+            D = 0.0;
+            D(1, 1) = -k2i(i);
+            D(2, 2) = -k2i(i);
+            D(3, 3) = -k1i(i);
+            int st = (i - 1) * 3;
+            A.SubMatrix(st + 1, st + 3, st + 1, st + 3) = D;
+        }
+
+        // Populate Exchange Parameters of Relaxation Matrix
+        IdentityMatrix I(3);
+        for (int i = 1; i <= mpool; i++)
+        {
+            for (int j = 1; j <= mpool; j++)
             {
-                st = (i - 1) * 3;
-                st2 = (j - 1) * 3;
-                A.SubMatrix(st + 1, st + 3, st2 + 1, st2 + 3)
-                    = I * kij(j, i); // NB 'reversal' of indices is correct here
+                if (i != j)
+                {
+                    int st = (i - 1) * 3;
+                    int st2 = (j - 1) * 3;
+                    A.SubMatrix(st + 1, st + 3, st2 + 1, st2 + 3)
+                        = I * kij(j, i); // NB 'reversal' of indices is correct here
+                }
             }
         }
+        
+        // Create M0i Vector
+        for (int i = 1; i <= mpool; i++)
+        {
+            M0i(i * 3) = M0(i) / M0(1);
+        }
+        M0i(3) = 1.0;
+        
+        // Create Excitation Matrix
+        for (int i = 0; i < mpool; i++)
+        {
+            C(3 * i + 1) = sin(w1EX);
+            C(3 * i + 2) = sin(w1EX);
+            C(3 * i + 3) = cos(w1EX);
+        }
+        
+        // Create Spoiling Matrix Using Square matrix with Transverse elements = 0
+        for (int i = 1; i <= mpool; ++i)
+        {
+            int st = i * 3;
+            Spoil(st) = 1.0;
+        }
+
     }
-    A(3, (mpool - 1) * 3 + 1) = kij(mpool, 1); // NB 'reversal' of indices is correct here
-    A((mpool - 1) * 3 + 1, 3) = kij(1, mpool); // NB 'reversal' of indices is correct here
+    else
+    {
+        // Find Diagonals of Relaxation Matrix
+        for (int i = 1; i <= mpool; i++)
+        {
+            k1i(i) = 1 / T12(1, i) + (kij.Row(i)).Sum();
+            k2i(i) = 1 / T12(2, i) + (kij.Row(i)).Sum() - kij(i, mpool);
+        }
+        
+        // Populate Diagonals of Relaxation Matrix
+        for (int i = 1; i <= mpool - 1; i++)
+        {
+            Matrix D(3, 3);
+            D = 0.0;
+            D(1, 1) = -k2i(i);
+            D(2, 2) = -k2i(i);
+            D(3, 3) = -k1i(i);
+            int st = (i - 1) * 3;
+            A.SubMatrix(st + 1, st + 3, st + 1, st + 3) = D;
+        }
+        A(nRelrows, nRelrows) = -k1i(mpool);
 
+        // Populate Exchange Parameters of Relaxation Matrix
+        IdentityMatrix I(3);
+        for (int i = 1; i <= mpool - 1; i++)
+        {
+            for (int j = 1; j <= mpool - 1; j++)
+            {
+                if (i != j)
+                {
+                    int st = (i - 1) * 3;
+                    int st2 = (j - 1) * 3;
+                    A.SubMatrix(st + 1, st + 3, st2 + 1, st2 + 3)
+                        = I * kij(j, i); // NB 'reversal' of indices is correct here
+                }
+            }
+        }
+        A(3, nRelrows) = kij(mpool, 1); // NB 'reversal' of indices is correct here
+        A(nRelrows, 3) = kij(1, mpool); // NB 'reversal' of indices is correct here
+
+        // Create Excitation Matrix
+        for (int i = 0; i < mpool - 1; i++)
+        {
+            C(3 * i + 1) = sin(w1EX);
+            C(3 * i + 2) = sin(w1EX);
+            C(3 * i + 3) = cos(w1EX);
+        }
+        C(nRelrows) = cos(w1EX);
+        
+        // Create M0i Vector
+        for (int i = 2; i <= mpool - 1; i++)
+        {
+            M0i(i * 3) = M0(i) / M0(1);
+        }
+        M0i(3) = 1.0;
+        M0i(nRelrows) = M0(mpool) / M0(1);
+
+        // Create Spoiling Matrix Using Square matrix with Transverse elements = 0
+        for (int i = 1; i <= mpool - 1; ++i)
+        {
+            int st = i * 3;
+            Spoil(st) = 1.0;
+        }
+        Spoil(nRelrows) = 1.0;
+        
+    }
+    
     // Find Readout Matrix
-
+    // TODO: Need to make TR a ColumnVector so we can use ptvecs with different sizes/nPulses
     double Tr = m_TR;
     float Tdc = 0;
     int iNpSeg;
@@ -1828,22 +1675,10 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(ColumnVector &Mz, // Vector: Magneti
         Tdc = ptvec(ptvec.Nrows());
         iNpSeg = ptvec.Nrows() - 1;
     }
-
-    Matrix Er = expm(A * Tr);
-    Matrix Edc = expm(A * Tdc);
-
-    // Create Spoiling Matrix Using Square matrix with Transverse elements = 0
-
-    DiagonalMatrix Spoil((mpool - 1) * 3 + 1);
-    Spoil = 0.0;
-    for (int i = 1; i <= mpool - 1; ++i)
-    {
-        st = i * 3;
-        Spoil(st) = 1.0;
-    }
-    Spoil((mpool - 1) * 3 + 1) = 1.0;
-
-    DiagonalMatrix iSpoil(Spoil);
+    
+    // Create Inter-pulse spoiling matrix 
+    // if using shaped pulses with spoiling
+    DiagonalMatrix iSpoil(nRelrows);
     if (m_InterSpoil)
     {
         iSpoil = Spoil;
@@ -1853,75 +1688,68 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(ColumnVector &Mz, // Vector: Magneti
         iSpoil = Eye;
     }
 
+    Matrix Er = expm(A * Tr);
+    Matrix Edc = expm(A * Tdc);
+
     // Create End of Saturation Pulse Train Spoiling Delay Matrix with arbitrary 3 ms time
     /* 	NB: This is also the point in time where the magnetization vector, Mz, is solved for.
         Right after this rest, the magnetization is excited into the XY plane.
     */
-
     Matrix Es = expm(A * 3e-3);
 
-    // Create Excitation Matrix
-
-    DiagonalMatrix C((mpool - 1) * 3 + 1);
-    C = 0.0;
-
-    for (int i = 0; i < mpool - 1; i++)
-    {
-        C(3 * i + 1) = sin(w1EX);
-        C(3 * i + 2) = sin(w1EX);
-        C(3 * i + 3) = cos(w1EX);
-    }
-    C((mpool - 1) * 3 + 1) = cos(w1EX);
-
-    // Create M0i Vector
-
-    ColumnVector M0i((mpool - 1) * 3 + 1);
-    M0i = 0.0;
-
-    for (int i = 2; i <= mpool - 1; i++)
-    {
-        M0i(i * 3) = M0(i) / M0(1);
-    }
-    M0i(3) = 1.0;
-    M0i((mpool - 1) * 3 + 1) = M0(mpool) / M0(1);
-
-    Matrix M((mpool - 1) * 3 + 1, nfreq);
-    M = 0.0;
 
     // Calculate MT RF saturation rate
-    ColumnVector gb(wvec);
-    gb = absLineShape(wvec - wi.Row(mpool).t(), T12(2, mpool));
+    ColumnVector gb(wvec); gb = 0.0;
+    if (m_lineshape != "none" && M0.Nrows() > 1)
+    {
+        gb = absLineShape(wvec - wi.Row(mpool).t(), T12(2, mpool));
+    }
 
     /**********************************************************************
      *					Solve for Mz
      **********************************************************************/
-
-    // Index for No Saturation image, Used for Z-Spectrum normalization at end of function
-    int iNoSat = 0.0;
-
+    
+    Matrix M(nRelrows, nfreq); M = 0.0;
     for (int k = 1; k <= nfreq; k++)
     {
-        Matrix Ems((mpool - 1) * 3 + 1, (mpool - 1) * 3 + 1);
-        Matrix Emt((mpool - 1) * 3 + 1, (mpool - 1) * 3 + 1);
-
+        Matrix Ems(nRelrows, nRelrows); //Ems = Eye;
+        Matrix Emt(nRelrows, nRelrows); //Emt = Eye;
+        
         for (int jj = 1; jj <= iNpSeg; ++jj)
         {
-            Matrix W((mpool - 1) * 3 + 1, (mpool - 1) * 3 + 1);
+            Matrix W(nRelrows, nRelrows); 
             W = 0.0;
-            for (int nn = 1; nn <= mpool - 1; ++nn)
+            if (m_lineshape == "none" || M0.Nrows() == 1)
             {
-                Matrix Ws(3, 3);
-                Ws = 0.0;
-                Ws(2, 1) = (wvec(k) - wi(nn, k));
-                Ws(1, 2) = -Ws(2, 1);
-                Ws(3, 2) = w1(k) * pmagvec(jj);
-                Ws(2, 3) = -Ws(3, 2);
-                st = (nn - 1) * 3;
-                W.SubMatrix(st + 1, st + 3, st + 1, st + 3) = Ws;
+                for (int nn = 1; nn <= mpool; ++nn)
+                {
+                    Matrix Ws(3, 3);
+                    Ws = 0.0;
+                    Ws(2, 1) = (wi(nn, k) - wvec(k));
+                    Ws(1, 2) = -Ws(2, 1);
+                    Ws(3, 2) = w1(k) * pmagvec(jj);
+                    Ws(2, 3) = -Ws(3, 2);
+                    int st = (nn - 1) * 3;
+                    W.SubMatrix(st + 1, st + 3, st + 1, st + 3) = Ws;
+                }
             }
-            W((mpool - 1) * 3 + 1, (mpool - 1) * 3 + 1)
-                = -M_PI * gb(k) * 1e-6 * w1(k) * pmagvec(jj) * w1(k) * pmagvec(jj);
-
+            else
+            {
+                for (int nn = 1; nn <= mpool - 1; ++nn)
+                {
+                    Matrix Ws(3, 3);
+                    Ws = 0.0;
+                    Ws(2, 1) = (wvec(k) - wi(nn, k));
+                    Ws(1, 2) = -Ws(2, 1);
+                    Ws(3, 2) = w1(k) * pmagvec(jj);
+                    Ws(2, 3) = -Ws(3, 2);
+                    int st = (nn - 1) * 3;
+                    W.SubMatrix(st + 1, st + 3, st + 1, st + 3) = Ws;
+                }
+                W(nRelrows, nRelrows)
+                    = -M_PI * gb(k) * 1e-6 * w1(k) * pmagvec(jj) * w1(k) * pmagvec(jj);
+            }
+            
             Matrix Em = expm((A + W) * ptvec(jj));
 
             if (jj == 1)
@@ -1959,13 +1787,10 @@ void CESTFwdModel::Mz_spectrum_SS_LineShape(ColumnVector &Mz, // Vector: Magneti
     }
 
     Matrix Er0 = expm(A * m_TR);
-    ColumnVector Mz0((mpool - 1) * 3 + 1);
-    Matrix Er0Temp((mpool - 1) * 3 + 1, (mpool - 1) * 3 + 1);
-    Er0Temp = (Eye - Spoil * C * Er0);
-    Mz0 = Er0Temp.i() * ((Eye - Er0) * M0i);
+    Matrix Er0Temp = (Eye - Spoil * C * Er0);
+    ColumnVector Mz0 = Er0Temp.i() * ((Eye - Er0) * M0i);
 
-    ColumnVector Mtemp = (M.Row(3)).AsColumn();
-    Mz = abs(Mtemp / Mz0(3)) * M0(1);
+    Mz = abs( (M.Row(3)).AsColumn() / Mz0(3)) * M0(1);
 }
 
 // Function that will raise a matrix to a power Power

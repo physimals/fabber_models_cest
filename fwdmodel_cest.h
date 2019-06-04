@@ -64,11 +64,6 @@ protected:
         const NEWMAT::ColumnVector &t, const NEWMAT::ColumnVector &M0, const NEWMAT::Matrix &wi,
         const NEWMAT::Matrix &kij, const NEWMAT::Matrix &T12, double w1EX) const;
 
-    // Steady State Mz Spectrum using an MT Lineshape
-    void Mz_spectrum_SS_LineShape(NEWMAT::ColumnVector &Mz, const NEWMAT::ColumnVector &wvec,
-        const NEWMAT::ColumnVector &w1, const NEWMAT::ColumnVector &t, const NEWMAT::ColumnVector &M0,
-        const NEWMAT::Matrix &wi, const NEWMAT::Matrix &kij, const NEWMAT::Matrix &T12, double w1EX) const;
-
     // Function to raise a matrix to a power
     inline NEWMAT::ReturnMatrix mpower(const NEWMAT::Matrix &Mat_Base, int Power) const;
     template <typename T> vector<T> spower(const vector<T> &Mat_Base, int Power) const;
