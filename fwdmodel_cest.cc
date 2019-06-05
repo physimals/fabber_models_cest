@@ -621,7 +621,7 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
             // Only need to fix w1EX if using SS CEST
             double w1EX = m_EXmagMax * B1corr;
 
-            Mz_spectrum_SS(Mztissue, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX);
+            Mz_spectrum_SS(Mztissue, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX, restrict_pool);
         }
         else
         {
@@ -1467,15 +1467,16 @@ void CESTFwdModel::Ainverse(const Matrix A, RowVector &Ai) const
 }
 
 // Models the Bloch-McConnell equations based on Listerud, Magn Reson Med 1997; 37: 693–705.
-void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz, // Vector: Magnetization
-    const ColumnVector &wvec,    // Vector: Saturation Pulse Offset (radians/s = ppm * 42.58*B0*2*pi)
-    const ColumnVector &w1,      // Vector: B1-corrected Saturation Pulse (radians = uT*42.58*2*pi)
-    const ColumnVector &nPulses, // Vector: Number Pulses
-    const ColumnVector &M0,      // Vector: Pool Sizes
-    const Matrix &wi,            // Matrix: Pool offsets (radians/s = ppm * 42.58*B0*2*pi)
-    const Matrix &kij,           // Matrix: exchange rates for each pool (see below for in depth description)
-    const Matrix &T12,           // Matrix: T1's (Row 1) and T2's (Row 2)
-    double w1EX                  // Double: B1-corrected Excitation Flip Angle
+void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
+    , const ColumnVector &wvec    // Vector: Saturation Pulse Offset (radians/s = ppm * 42.58*B0*2*pi)
+    , const ColumnVector &w1      // Vector: B1-corrected Saturation Pulse (radians = uT*42.58*2*pi)
+    , const ColumnVector &nPulses // Vector: Number Pulses
+    , const ColumnVector &M0      // Vector: Pool Sizes
+    , const Matrix &wi            // Matrix: Pool offsets (radians/s = ppm * 42.58*B0*2*pi)
+    , const Matrix &kij           // Matrix: exchange rates for each pool (see below for in depth description)
+    , const Matrix &T12           // Matrix: T1's (Row 1) and T2's (Row 2)
+    , double w1EX                 // Double: B1-corrected Excitation Flip Angle
+    , int pool_num           // Int: Flag to signal that we are calculating the CESTR*
     ) const
 {
     /*********************************************************************
@@ -1488,7 +1489,13 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz, // Vector: Magnetization
 
 
      *********************************************************************/
-
+    
+    // If not fitting CESTR*, change pool_num to correct rest of logic
+    if (pool_num < 0)
+    {
+        pool_num = npool;
+    }
+    
     // total number of samples collected
     int nfreq = wvec.Nrows();
 
@@ -1497,7 +1504,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz, // Vector: Magnetization
 
     // Setting number of rows in Relaxation Matrix
     int nRelrows;
-    if (m_lineshape == "none" || M0.Nrows() == 1) 
+    if ( m_lineshape == "none" || M0.Nrows() == 1 || pool_num != npool) 
     {
         nRelrows = mpool * 3;
     }
@@ -1526,7 +1533,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz, // Vector: Magnetization
     DiagonalMatrix Spoil(nRelrows); Spoil = 0.0;
     
     
-    if (m_lineshape == "none" || M0.Nrows() == 1)
+    if ( m_lineshape == "none" || M0.Nrows() == 1 || pool_num != npool) 
     {
         // Find Diagonals of Relaxation Matrix
         for (int i = 1; i <= mpool; i++)
@@ -1700,7 +1707,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz, // Vector: Magnetization
 
     // Calculate MT RF saturation rate
     ColumnVector gb(wvec); gb = 0.0;
-    if (m_lineshape != "none" && M0.Nrows() > 1)
+    if (m_lineshape != "none" && M0.Nrows() > 1 &&  pool_num == npool)
     {
         gb = absLineShape(wvec - wi.Row(mpool).t(), T12(2, mpool));
     }
@@ -1719,7 +1726,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz, // Vector: Magnetization
         {
             Matrix W(nRelrows, nRelrows); 
             W = 0.0;
-            if (m_lineshape == "none" || M0.Nrows() == 1)
+            if (m_lineshape == "none" || M0.Nrows() == 1 || pool_num != npool)
             {
                 for (int nn = 1; nn <= mpool; ++nn)
                 {
