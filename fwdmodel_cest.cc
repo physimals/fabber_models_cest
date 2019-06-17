@@ -341,8 +341,28 @@ void CESTFwdModel::EvaluateCestRstar(const ColumnVector &params, ColumnVector &r
     // LOG << "Evaluating at " << ppm_eval << ", " << (ppm_eval* wlam / 1e6) << endl;
     // Evaluate at fixed PPM by linear interpolation. Note freq transformation
     // same as transformation applied to wvec
-    double water = lin_interp(wvec, water_only, ppm_eval * wlam / 1e6);
-    double pool = lin_interp(wvec, with_pool, ppm_eval * wlam / 1e6);
+    
+    // Need to use a spline interpolation
+    vector<double> vec_wvec;
+    vector<double> vec_water_only;
+    vector<double> vec_with_pool;
+    
+    vec_wvec.reserve(wvec.Nrows());
+    vec_water_only.reserve(wvec.Nrows());
+    vec_with_pool.reserve(wvec.Nrows());
+    
+    for (int ii = 1; ii <= wvec.Nrows(); ++ii)
+    {
+        vec_wvec.push_back(wvec(ii));
+        vec_water_only.push_back(water_only(ii));
+        vec_with_pool.push_back(with_pool(ii));
+    }
+    
+     NaturalSplineInterpolator interp_water_only(vec_wvec, vec_water_only);
+     NaturalSplineInterpolator interp_with_pool(vec_wvec, vec_with_pool);
+    
+    double water = interp_water_only(ppm_eval * wlam / 1e6);
+    double pool = interp_with_pool(ppm_eval * wlam / 1e6);
     // LOG << "water " << water << endl;
     // LOG << "pool " << pool << endl;
     // LOG << "frac " << pool/water << endl;
