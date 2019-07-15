@@ -269,7 +269,7 @@ void CESTFwdModel::GetOutputs(std::vector<std::string> &outputs) const
 }
 
 struct by_x {
-    bool operator()(pair<double, double> &c1, pair<double, double> &c2) const {
+    bool operator()(const pair<double, double> &c1, const pair<double, double> &c2) const {
         return c1.first < c2.first;
     }
 };
