@@ -268,25 +268,46 @@ void CESTFwdModel::GetOutputs(std::vector<std::string> &outputs) const
     }
 }
 
+struct by_x {
+    bool operator()(const pair<double, double> &c1, const pair<double, double> &c2) const {
+        return c1.first < c2.first;
+    }
+};
+
 double lin_interp(const ColumnVector &x, const ColumnVector &y, double pos)
 {
+    // Determine the value of the function given by (x, y) co-ordinates at
+    // the position pos, using a linear interpolation metho
+    
+    // This is complicated by the fact that sometimes x is not strictly 
+    // increasing which makes interpolation impossible. So we start out
+    // by sorting x/y coords into increasing x order
+    vector<pair<double, double> > coords;
+    for (int i=1; i<=x.Nrows(); i++) {
+        pair<double, double> c(x(i), y(i));
+        coords.push_back(c);
+    }
+    std::sort(coords.begin(), coords.end(), by_x());
+
     // Quick-and-dumb linear interpolation. Assume x, pos > 0
     // and function starts at 0, 0
     double prev_val = 0;
     double prev_x = 0;
-    for (int i = 1; i <= x.Nrows(); i++)
+    for (unsigned int i = 0; i<coords.size(); i++)
     {
-        if (pos < x(i))
+        double x = coords[i].first;
+        double y = coords[i].second;
+        if (pos < x)
         {
-            double frac = (pos - prev_x) / (x(i) - prev_x);
-            return prev_val + frac * (y(i) - prev_val);
+            double frac = (pos - prev_x) / (x - prev_x);
+            return prev_val + frac * (y - prev_val);
         }
-        prev_val = y(i);
-        prev_x = x(i);
+        prev_val = y;
+        prev_x = x;
     }
 
     // pos beyond last x value - just return last y value
-    return y(y.Nrows());
+    return coords[coords.size()-1].second;
 }
 
 void CESTFwdModel::EvaluateModel(const ColumnVector &params, ColumnVector &result, const std::string &key) const
@@ -309,6 +330,7 @@ void CESTFwdModel::EvaluateCestRstar(const ColumnVector &params, ColumnVector &r
 {
     assert(pool_num > 1);
     // LOG << "Outputting CESTRstar for pool " << pool_num << endl;
+
     // For this calculation, we use default T1/T2, NOT any inferred values or
     // image priors
     ColumnVector mod_params = params;
@@ -325,27 +347,59 @@ void CESTFwdModel::EvaluateCestRstar(const ColumnVector &params, ColumnVector &r
     int ppm_off_idx = (npool - 1) * 2 + 2;
     mod_params(ppm_off_idx) = 0;
 
-    // LOG << "freq: " << wvec.t();
+    // Determine the Z spectrum for water only, and then in the presence of this pool only
     ColumnVector water_only, with_pool;
     Evaluate(mod_params, water_only, 1);
-    // LOG << "water only: " << water_only.t();
     Evaluate(mod_params, with_pool, pool_num);
-    // LOG << "With pool: " << with_pool.t();
-    // We evaluate the spectrum at a fixed PPM from the poolmat file, unless
+    //LOG << "freq: " << wvec.t();
+    //LOG << "water only: " << water_only.t();
+    //LOG << "With pool: " << with_pool.t();
+
+    // We evaluate the Z spectrum at a fixed PPM from the poolmat file, unless
     // the value is 0 in which case we use 50ppm (works for semisolid pool)
     double ppm_eval = 50;
     if (poolppm(pool_num - 1) != 0)
     {
         ppm_eval = poolppm(pool_num - 1);
     }
-    // LOG << "Evaluating at " << ppm_eval << ", " << (ppm_eval* wlam / 1e6) << endl;
+    //LOG << "Evaluating at " << ppm_eval << ", " << (ppm_eval* wlam / 1e6) << endl;
+
     // Evaluate at fixed PPM by linear interpolation. Note freq transformation
     // same as transformation applied to wvec
     double water = lin_interp(wvec, water_only, ppm_eval * wlam / 1e6);
     double pool = lin_interp(wvec, with_pool, ppm_eval * wlam / 1e6);
-    // LOG << "water " << water << endl;
-    // LOG << "pool " << pool << endl;
-    // LOG << "frac " << pool/water << endl;
+    //LOG << "Lin interp" << endl;
+    //LOG << "water " << water << endl;
+    //LOG << "pool " << pool << endl;
+    //LOG << "frac " << pool/water << endl;
+
+    // Need to use a spline interpolation
+    /* vector<double> vec_wvec;
+    vector<double> vec_water_only;
+    vector<double> vec_with_pool;
+    
+    vec_wvec.reserve(wvec.Nrows());
+    vec_water_only.reserve(wvec.Nrows());
+    vec_with_pool.reserve(wvec.Nrows());
+    
+    for (int ii = 1; ii <= wvec.Nrows(); ++ii)
+    {
+        vec_wvec.push_back(wvec(ii));
+        vec_water_only.push_back(water_only(ii));
+        vec_with_pool.push_back(with_pool(ii));
+    }
+    
+    NaturalSplineInterpolator interp_water_only(vec_wvec, vec_water_only);
+    NaturalSplineInterpolator interp_with_pool(vec_wvec, vec_with_pool);
+    
+    water = interp_water_only(ppm_eval * wlam / 1e6);
+    pool = interp_with_pool(ppm_eval * wlam / 1e6);
+    LOG << "Spline interp" << endl;
+    LOG << "water " << water << endl;
+    LOG << "pool " << pool << endl;
+    LOG << "frac " << pool/water << endl;
+    */
+    
     result.ReSize(1);
     result(1) = 100 * (water - pool) / params(1);
     // LOG << "res " << result.t() << endl;
