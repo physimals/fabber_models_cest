@@ -38,6 +38,7 @@ static OptionSpec OPTIONS[] = {
         OPT_NONREQ, "" },
     { "pv-threshold", OPT_FLOAT, "Partial volume threshold for including tissue contribution", OPT_NONREQ, "0.5" },
     { "csf-tiss-m0ratio", OPT_FLOAT, "Used for fixing CSF M0", OPT_NONREQ, "0.5269" },
+    { "lineshape", OPT_STR, "Saturation lineshape for the MT pool. Options: gaussian, superlorentzian, lorentzian, none [default].", OPT_NONREQ, "none" },
     { "" },
 };
 
