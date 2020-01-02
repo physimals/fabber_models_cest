@@ -32,7 +32,7 @@ public:
     virtual int NumParams() const
     {
         return (3 * npool - 1) + 1 + (inferdrift ? 1 : 0) + (t12soft ? (2 * npool) : 0) + (3 * nexpool)
-            + (use_pvcorr ? 2 : 0);
+            + (m_pvcorr ? 2 : 0);
     }
 
     virtual ~CESTFwdModel()
@@ -81,13 +81,6 @@ protected:
     NEWMAT::ReturnMatrix PadeApproximant(NEWMAT::Matrix inmatrix, int m, int &s) const;
     NEWMAT::ReturnMatrix PadeCoeffs(int m) const;
 
-    // Constants
-
-    // Lookup the starting indices of the parameters
-
-    // vector indices for the parameters to expereicne ARD
-    vector<int> ard_index;
-
     // flags
     bool t12soft;
     bool inferdrift;
@@ -110,11 +103,6 @@ protected:
     NEWMAT::Matrix T12master;
     NEWMAT::ColumnVector poolcon;
     NEWMAT::ColumnVector poolconprec;
-    // NEWMAT::Matrix T12WMmaster;
-    // NEWMAT::Matrix T12CSFmaster;
-
-    // MT pool
-    // bool mtpool;
 
     // extra pools
     int nexpool;
@@ -132,30 +120,23 @@ protected:
     int nseg;
 
     // Readout specifications
-    double m_TR;
-    double m_EXmagMax;
+    double m_tr;
+    double m_fa;
 
     // Flags for New Steady State Sequence
-    bool m_SS;         // Flag to use steady state sequence
-    bool m_InterSpoil; // Flag to use interpulse saturation spoiling
-
-    string m_lineshape; // String that describes which lineshape to use
+    bool m_new_ss;           // Flag to use new steady state sequence
+    bool m_inter_spoil;      // Flag to use interpulse saturation spoiling
+    std::string m_lineshape; // String that describes which lineshape to use
 
     // Variables used to increase processing speed of SuperLorentzian Lineshape
-    mutable double m_T2m;
+    mutable double m_t2m;
     mutable std::vector<double> m_gc;
 
-    // processing flags
-    mutable bool fastgrad; // use a fast approximation to the expm because we are caculating the gradient
-
-    // ard flags
-    bool doard;
-
     // Partial volume correction
-    bool use_pvcorr;
-    NEWMAT::ColumnVector tissue_pv;
-    double pv_threshold;
-    double csf_tiss_m0ratio;
+    bool m_pvcorr;
+    NEWMAT::ColumnVector m_pv_img;
+    double m_pv_threshold;
+    double m_pv_csf_tiss_m0ratio;
 
 private:
     /** Auto-register with forward model factory. */

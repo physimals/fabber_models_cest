@@ -25,20 +25,20 @@ static OptionSpec OPTIONS[] = {
     { "expools", OPT_MATRIX, "ASCII matrix containing extra pool specification", OPT_NONREQ, "" },
     { "ptrain", OPT_MATRIX, "ASCII matrix containing pulsed saturation specification", OPT_NONREQ, "" },
     { "t12prior", OPT_BOOL, "Include uncertainty in T1 and T2 values", OPT_NONREQ, "" },
-    { "inferdrift", OPT_BOOL, "", OPT_NONREQ, "" },
+    { "inferdrift", OPT_BOOL, "Infer drift in Z spectrum frequencies", OPT_NONREQ, "" },
     { "b1off", OPT_BOOL, "Compatibility option - infers B1 correction as an offset as in previous versions of model", OPT_NONREQ, "" },
     { "lorentz", OPT_BOOL, "Alternative to Matrix exponential solution to Bloch equations", OPT_NONREQ, "" },
     { "steadystate", OPT_BOOL, "Alternative to Matrix exponential solution to Bloch equations", OPT_NONREQ, "" },
-    { "TR", OPT_MATRIX, "TR in seconds", OPT_NONREQ, "" },
-    { "EXFA", OPT_MATRIX, "Excitation flip angle in degrees", OPT_NONREQ, "" },
+    { "tr", OPT_MATRIX, "TR in seconds for use with steady-state solution", OPT_NONREQ, "" },
+    { "fa", OPT_MATRIX, "Excitation flip angle in degrees for use with steady-state solution", OPT_NONREQ, "" },
     { "satspoil", OPT_BOOL, "Perform saturation interpulse spoiling for saturation pulse trains", OPT_NONREQ, "" },
     { "pvimg", OPT_IMAGE,
         "Tissue partial volume image. Should be 3D image containing tissue partial volumes, i.e. sum of GM and WM "
         "partial volumes",
         OPT_NONREQ, "" },
     { "pv-threshold", OPT_FLOAT, "Partial volume threshold for including tissue contribution", OPT_NONREQ, "0.5" },
-    { "csf-tiss-m0ratio", OPT_FLOAT, "Used for fixing CSF M0", OPT_NONREQ, "0.5269" },
-    { "lineshape", OPT_STR, "Saturation lineshape for the MT pool. Options: gaussian, superlorentzian, lorentzian, none [default].", OPT_NONREQ, "none" },
+    { "csf-tiss-m0ratio", OPT_FLOAT, "Used for fixing CSF M0 when using partial volume correction", OPT_NONREQ, "0.5269" },
+    { "lineshape", OPT_STR, "Saturation lineshape for the MT pool (which must be the last pool specified). Options: gaussian, superlorentzian, lorentzian, none", OPT_NONREQ, "none" },
     { "" },
 };
 
@@ -176,7 +176,7 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) con
         }
     }
 
-    if (use_pvcorr)
+    if (m_pvcorr)
     {
         // CSF pool T1 and T2 priors
         prior.means(place) = 1.9;
@@ -578,7 +578,7 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
     // PVC parameters
     double t1csf = 0;
     double t2csf = 0;
-    if (use_pvcorr)
+    if (m_pvcorr)
     {
         t1csf = paramcpy(place++);
         t2csf = paramcpy(place++);
@@ -651,15 +651,15 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
     }
 
     float pv_val = 1.0;
-    if (use_pvcorr)
+    if (m_pvcorr)
     {
-        pv_val = tissue_pv(voxel);
+        pv_val = m_pv_img(voxel);
     }
 
     // Generate tissue z spectrum if pv > threshold (otherwise we're doing csf-only fit)
     ColumnVector Mztissue(wvec);
 
-    if (pv_val >= pv_threshold)
+    if (pv_val >= m_pv_threshold)
     {
         // We have enough tissue in the voxel to include a tissue component - note that
         // when PVC is not enabled the partial volume value is fixed at 1.0 so this is
@@ -670,11 +670,11 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
             // PV correction supports lorentz option for 'tissue' spectrum
             Mztissue = Mz_spectrum_lorentz(wvec, w1, tsatvec, M0, wimat, kij, T12);
         }
-        else if (m_SS)
+        else if (m_new_ss)
         {
             // Call to Steady State CEST Model
             // Only need to fix w1EX if using SS CEST
-            double w1EX = m_EXmagMax * B1corr;
+            double w1EX = m_fa * B1corr;
 
             Mz_spectrum_SS(Mztissue, wvec, w1, tsatvec, M0, wimat, kij, T12, w1EX, restrict_pool);
         }
@@ -685,13 +685,13 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
         }
     }
     
-    if (use_pvcorr)
+    if (m_pvcorr)
     {
         // Partial volume correction is enabled - include a CSF component based on
         // the tissue/CSF partial volume
 
         ColumnVector M0csf(1);
-        M0csf(1) = M0(1) * csf_tiss_m0ratio;
+        M0csf(1) = M0(1) * m_pv_csf_tiss_m0ratio;
 
         if (M0csf(1) < 1e-4)
         {
@@ -713,7 +713,7 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
         ColumnVector Mzcsf(wvec);
         Mz_spectrum(Mzcsf, wvec, w1, tsatvec, M0csf, wimat_csf, kij_csf, T12csf);
 
-        if (pv_val >= pv_threshold)
+        if (pv_val >= m_pv_threshold)
         {
             // We have enough tissue in the voxel to include a tissue component as well
             result = Mztissue * pv_val + Mzcsf * (1.0 - pv_val);
@@ -770,7 +770,7 @@ void CESTFwdModel::Initialize(ArgsType &args)
     string pulsematfile;
 
     t12soft = false;
-    m_InterSpoil = false;
+    m_inter_spoil = false;
 
     // read data specification from file
     dataspec = read_ascii_matrix(args.Read("spec"));
@@ -793,14 +793,14 @@ void CESTFwdModel::Initialize(ArgsType &args)
     steadystate = args.ReadBool("steadystate");
 
     // Use Interpulse Spoiling
-    m_InterSpoil = args.GetBool("satspoil");
+    m_inter_spoil = args.GetBool("satspoil");
 
     // Use Lineshape for MT pool
     m_lineshape = args.GetStringDefault("lineshape", "none");
 
     // Use Readout Parameters
-    m_TR = args.GetDoubleDefault("TR", -1.0);
-    m_EXmagMax = args.GetDoubleDefault("EXFA", -1.0);
+    m_tr = args.GetDoubleDefault("tr", args.GetDoubleDefault("TR", -1.0));
+    m_fa = args.GetDoubleDefault("fa", args.GetDoubleDefault("EXFA", -1.0));
 
     // Deal with the specification of the pools
     npool = poolmat.Nrows();
@@ -934,63 +934,63 @@ void CESTFwdModel::Initialize(ArgsType &args)
     // Steady State Modeling
     // For Modeling the steady state Signal according to Listerud, Magn Reson Med 1997; 37: 693–705.
 
-    // Initializing m_T2m
-    m_T2m = 1e-5;
-    if (m_TR > 0.0 && m_EXmagMax > 0.0)
+    // Initializing m_t2m
+    m_t2m = 1e-5;
+    if (m_tr > 0.0 && m_fa > 0.0)
     {
-        m_SS = true;
+        m_new_ss = true;
 
         LOG << "\nRunning Steady State CEST Model Based upon Listerud, MRM: 37 (1997)\n" << endl;
 
-        LOG << "TR (s): \t" << m_TR << endl;
+        LOG << "TR (s): \t" << m_tr << endl;
 
-        LOG << "Excitation Flip Angle (Degrees):\t" << m_EXmagMax << endl << endl;
-        m_EXmagMax *= M_PI / 180;
+        LOG << "Excitation Flip Angle (Degrees):\t" << m_fa << endl << endl;
+        m_fa *= M_PI / 180;
 
         LOG << "Using Lineshape: " << m_lineshape << endl << endl;
     }
-    else if (m_TR > 0.0 && m_EXmagMax <= 0.0)
+    else if (m_tr > 0.0 && m_fa <= 0.0)
     {
-        cout << "WARNING! - you supplied a TR, but no Excitation flip angle (--EXFA).  Will run Original Fabber CEST "
+        cout << "WARNING! - you supplied a TR, but no Excitation flip angle (--fa).  Will run Original Fabber CEST "
                 "Model"
              << endl;
-        m_SS = false;
+        m_new_ss = false;
         LOG << "Running Original Fabber CEST Method" << endl;
     }
-    else if (m_TR <= 0.0 && m_EXmagMax > 0.0)
+    else if (m_tr <= 0.0 && m_fa > 0.0)
     {
-        cout << "WARNING! - you supplied an Excitation flip angle, but no TR (--TR).  Will run Original Fabber CEST "
+        cout << "WARNING! - you supplied an Excitation flip angle, but no TR (--tr).  Will run Original Fabber CEST "
                 "Model"
              << endl;
-        m_SS = false;
+        m_new_ss = false;
         LOG << "Running Original Fabber CEST Method" << endl;
     }
     else
     {
-        m_SS = false;
+        m_new_ss = false;
         LOG << "Running Original Fabber CEST Method" << endl;
     }
 
     // Partial volume correction
-    pv_threshold = 0.0;
+    m_pv_threshold = 0.0;
     try
     {
         // Partial volume image should be 3D map
         Matrix pvimg = args.GetVoxelData("pvimg");
         LOG << "Tissue partial volume image found - using partial volume correction" << endl;
-        use_pvcorr = true;
+        m_pvcorr = true;
         if (pvimg.Nrows() > 1)
         {
             throw InvalidOptionValue("pvimg", "4D data set", "3D data set");
         }
-        tissue_pv = pvimg.Row(1).t();
+        m_pv_img = pvimg.Row(1).t();
 
-        pv_threshold = args.GetDoubleDefault("pv-threshold", 0.5, 0, 1);
-        csf_tiss_m0ratio = args.GetDoubleDefault("csf-tiss-m0ratio", 0.5269);
+        m_pv_threshold = args.GetDoubleDefault("pv-threshold", 0.5, 0, 1);
+        m_pv_csf_tiss_m0ratio = args.GetDoubleDefault("csf-tiss-m0ratio", 0.5269);
     }
     catch (DataNotFound &e)
     {
-        use_pvcorr = false;
+        m_pvcorr = false;
         LOG << "Tissue partial volume image not found - will not use partial volume correction" << endl;
     }
 }
@@ -1054,7 +1054,7 @@ void CESTFwdModel::NameParams(vector<string> &names) const
         }
     }
 
-    if (use_pvcorr)
+    if (m_pvcorr)
     {
         // Additional PV paramters
         names.push_back("T1csf");
@@ -1717,7 +1717,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
     
     // Find Readout Matrix
     // TODO: Need to make TR a ColumnVector so we can use ptvecs with different sizes/nPulses
-    double Tr = m_TR;
+    double Tr = m_tr;
     float Tdc = 0;
     int iNpSeg;
     if (ptvec.Nrows() == 1)
@@ -1741,7 +1741,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
     // Create Inter-pulse spoiling matrix 
     // if using shaped pulses with spoiling
     DiagonalMatrix iSpoil(nRelrows);
-    if (m_InterSpoil)
+    if (m_inter_spoil)
     {
         iSpoil = Spoil;
     }
@@ -1848,7 +1848,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
             * M0i;
     }
 
-    Matrix Er0 = expm(A * m_TR);
+    Matrix Er0 = expm(A * m_tr);
     Matrix Er0Temp = (Eye - Spoil * C * Er0);
     ColumnVector Mz0 = Er0Temp.i() * ((Eye - Er0) * M0i);
 
@@ -2026,14 +2026,14 @@ ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector &gbInMat, double T2) 
 
         vector<double> gc;
         gc.reserve(deltac.size());
-        if (m_T2m == T2)
+        if (m_t2m == T2)
         {
             gc = m_gc;
         }
         else
         {
             gc = SuperLorentzianGenerator(deltac, T2);
-            m_T2m = T2;
+            m_t2m = T2;
             m_gc = gc;
         }
 
