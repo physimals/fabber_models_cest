@@ -29,8 +29,8 @@ static OptionSpec OPTIONS[] = {
     { "b1off", OPT_BOOL, "Compatibility option - infers B1 correction as an offset as in previous versions of model", OPT_NONREQ, "" },
     { "lorentz", OPT_BOOL, "Alternative to Matrix exponential solution to Bloch equations", OPT_NONREQ, "" },
     { "steadystate", OPT_BOOL, "Alternative to Matrix exponential solution to Bloch equations", OPT_NONREQ, "" },
-    { "tr", OPT_MATRIX, "TR in seconds for use with steady-state solution", OPT_NONREQ, "" },
-    { "fa", OPT_MATRIX, "Excitation flip angle in degrees for use with steady-state solution", OPT_NONREQ, "" },
+    { "tr", OPT_FLOAT, "TR in seconds for use with steady-state solution", OPT_NONREQ, "" },
+    { "fa", OPT_FLOAT, "Excitation flip angle in degrees for use with steady-state solution", OPT_NONREQ, "" },
     { "satspoil", OPT_BOOL, "Perform saturation interpulse spoiling for saturation pulse trains", OPT_NONREQ, "" },
     { "pvimg", OPT_IMAGE,
         "Tissue partial volume image. Should be 3D image containing tissue partial volumes, i.e. sum of GM and WM "
@@ -873,26 +873,26 @@ void CESTFwdModel::Initialize(ArgsType &args)
     // Saturation time
     tsatvec = dataspec.Column(3);
 
-    LOG << " Model parameters: " << endl;
-    LOG << " Water - freq. (MHz) = " << wlam / 2 / M_PI << endl;
-    LOG << "         T1    (s)   = " << T12master(1, 1) << endl;
-    LOG << "         T2    (s)   = " << T12master(2, 1) << endl;
-    ;
+    LOG << "CESTFwdModel::Pools: " << endl;
+    LOG << " - Water - freq. (MHz) = " << wlam / 2 / M_PI << endl;
+    LOG << "           T1    (s)   = " << T12master(1, 1) << endl;
+    LOG << "           T2    (s)   = " << T12master(2, 1) << endl;
+
     for (int i = 2; i <= npool; i++)
     {
-        LOG << " Pool " << i << " - freq. (ppm)  = " << poolppm(i - 1) << endl;
-        LOG << "       - kiw   (s^-1) = " << exp(poolk(i - 1)) << endl;
-        LOG << "       - T1    (s)    = " << T12master(1, i) << endl;
-        LOG << "       - T2    (s)    = " << T12master(2, i) << endl;
+        LOG << " - Pool " << i << " - freq. (ppm)  = " << poolppm(i - 1) << endl;
+        LOG << "         - kiw   (s^-1) = " << exp(poolk(i - 1)) << endl;
+        LOG << "         - T1    (s)    = " << T12master(1, i) << endl;
+        LOG << "         - T2    (s)    = " << T12master(2, i) << endl;
     }
 
-    LOG << "Sampling frequencies (ppm):" << endl
+    LOG << "CESTFwdModel::Sampling frequencies (ppm):" << endl
         << (dataspec.Column(1)).t() << endl
-        << "                     (rad/s):" << endl
+        << "CESTFwdModel::Sampling frequencies (rad/s):" << endl
         << wvec.t() << endl;
-    LOG << "B1 values (uT):" << endl
+    LOG << "CESTFwdModel::B1 values (uT):" << endl
         << (dataspec.Column(2)).t() * 1e6 << endl
-        << "          (rad/s):" << endl
+        << "CESTFwdModel::B1 values (rad/s):" << endl
         << w1vec.t() << endl;
 
     // Pulsed saturation modelling
@@ -908,7 +908,7 @@ void CESTFwdModel::Initialize(ArgsType &args)
         pmagvec = 1.0;
         ptvec = 1e12; // a very long value for continuous saturation
 
-        LOG << "Saturation times (s):" << endl << tsatvec.t() << endl;
+        LOG << "CESTFwdModel::Saturation times (s):" << endl << tsatvec.t() << endl;
     }
     else
     {
@@ -924,11 +924,12 @@ void CESTFwdModel::Initialize(ArgsType &args)
         ptvec = pttemp - (nought & pttemp.Rows(1, pttemp.Nrows() - 1));
         nseg = pulsemat.Nrows();
 
-        LOG << "Pulse repeats:" << endl << tsatvec.t() << endl;
+        LOG << "CESTFwdModel::Pulse repeats:" << endl << tsatvec.t() << endl;
 
-        LOG << "Pulse shape:" << endl << "Number of segments: " << nseg << endl;
-        LOG << " Magnitudes (relative): " << pmagvec.t() << endl;
-        LOG << " Durations (s): " << ptvec.t() << endl;
+        LOG << "CESTFwdModel::Pulse shape:" << endl 
+            << " - Number of segments: " << nseg << endl
+            << " - Magnitudes (relative): " << pmagvec.t()
+            << " - Durations (s): " << ptvec.t();
     }
 
     // Steady State Modeling
@@ -951,17 +952,15 @@ void CESTFwdModel::Initialize(ArgsType &args)
     }
     else if (m_tr > 0.0 && m_fa <= 0.0)
     {
-        cout << "WARNING! - you supplied a TR, but no Excitation flip angle (--fa).  Will run Original Fabber CEST "
-                "Model"
-             << endl;
+        LOG << "WARNING! - you supplied a TR, but no Excitation flip angle (--fa).  Will run Original Fabber CEST "
+               "Model" << endl;
         m_new_ss = false;
         LOG << "Running Original Fabber CEST Method" << endl;
     }
     else if (m_tr <= 0.0 && m_fa > 0.0)
     {
-        cout << "WARNING! - you supplied an Excitation flip angle, but no TR (--tr).  Will run Original Fabber CEST "
-                "Model"
-             << endl;
+        LOG << "WARNING! - you supplied an Excitation flip angle, but no TR (--tr).  Will run Original Fabber CEST "
+                "Model" << endl;
         m_new_ss = false;
         LOG << "Running Original Fabber CEST Method" << endl;
     }
