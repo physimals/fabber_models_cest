@@ -374,33 +374,6 @@ void CESTFwdModel::EvaluateCestRstar(const ColumnVector &params, ColumnVector &r
     //LOG << "pool " << pool << endl;
     //LOG << "frac " << pool/water << endl;
 
-    // Need to use a spline interpolation
-    /* vector<double> vec_wvec;
-    vector<double> vec_water_only;
-    vector<double> vec_with_pool;
-    
-    vec_wvec.reserve(wvec.Nrows());
-    vec_water_only.reserve(wvec.Nrows());
-    vec_with_pool.reserve(wvec.Nrows());
-    
-    for (int ii = 1; ii <= wvec.Nrows(); ++ii)
-    {
-        vec_wvec.push_back(wvec(ii));
-        vec_water_only.push_back(water_only(ii));
-        vec_with_pool.push_back(with_pool(ii));
-    }
-    
-    NaturalSplineInterpolator interp_water_only(vec_wvec, vec_water_only);
-    NaturalSplineInterpolator interp_with_pool(vec_wvec, vec_with_pool);
-    
-    water = interp_water_only(ppm_eval * wlam / 1e6);
-    pool = interp_with_pool(ppm_eval * wlam / 1e6);
-    LOG << "Spline interp" << endl;
-    LOG << "water " << water << endl;
-    LOG << "pool " << pool << endl;
-    LOG << "frac " << pool/water << endl;
-    */
-    
     result.ReSize(1);
     result(1) = 100 * (water - pool) / params(1);
     // LOG << "res " << result.t() << endl;
