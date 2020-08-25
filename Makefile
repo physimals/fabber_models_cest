@@ -1,25 +1,11 @@
 include ${FSLCONFDIR}/default.mk
 
 PROJNAME = fabber_cest
-
-USRINCFLAGS = -I${INC_NEWMAT} -I${INC_PROB} -I${INC_CPROB} -I${INC_BOOST} -I..
-USRLDFLAGS = -L${LIB_NEWMAT} -L${LIB_PROB} -L../fabber_core
-
-FSLVERSION= $(shell cat ${FSLDIR}/etc/fslversion | head -c 1)
-ifeq ($(FSLVERSION), 5) 
-  NIFTILIB = -lfslio -lniftiio 
-  MATLIB = -lnewmat
-else 
-  UNAME := $(shell uname -s)
-  ifeq ($(UNAME), Linux)
-    MATLIB = -lopenblas
-  endif
-  NIFTILIB = -lNewNifti
-endif
-
-LIBS = -lnewimage -lmiscmaths -lutils -lprob ${MATLIB} ${NIFTILIB} -lznz -lz -ldl
-
+LIBS = -lfsl-fabber_models_cest -lfsl-fabberexec -lfsl-fabbercore \
+       -lfsl-newimage -lfsl-miscmaths -lfsl-NewNifti -lfsl-utils \
+       -lfsl-cprob -lfsl-znz -ldl
 XFILES = fabber_cest
+SOFILES = libfsl-fabber_models_cest.so
 
 # Forward models
 OBJS =  fwdmodel_cest.o spline_interpolator.o
@@ -32,23 +18,18 @@ GIT_SHA1:=$(shell git describe --dirty)
 GIT_DATE:=$(shell git log -1 --format=%ad --date=local)
 CXXFLAGS += -DGIT_SHA1=\"${GIT_SHA1}\" -DGIT_DATE="\"${GIT_DATE}\""
 
-# Pass Git revision details
-GIT_SHA1:=$(shell git describe --dirty)
-GIT_DATE:=$(shell git log -1 --format=%ad --date=local)
-CXXFLAGS += -DGIT_SHA1=\"${GIT_SHA1}\" -DGIT_DATE="\"${GIT_DATE}\""
-
 #
 # Build
 #
 
-all:	${XFILES} libfabber_models_cest.a
+all: ${XFILES} ${SOFILES}
 
 # models in a library
-libfabber_models_cest.a : ${OBJS}
-	${AR} -r $@ ${OBJS}
+libfsl-fabber_models_cest.so : ${OBJS}
+	${CXX} ${CXXFLAGS} -shared -o $@ $^
 
 # fabber built from the FSL fabbercore library including the models specifieid in this project
-fabber_cest : fabber_client.o ${OBJS}
-	${CXX} ${CXXFLAGS} ${LDFLAGS} -o $@ $< ${OBJS} -lfabbercore -lfabberexec ${LIBS}
+fabber_cest : fabber_client.o libfsl-fabber_models_cest.so
+	${CXX} ${CXXFLAGS} -o $@ $< ${LDFLAGS}
 
 # DO NOT DELETE
