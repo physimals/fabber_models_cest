@@ -132,7 +132,7 @@ void CESTFwdModel::HardcodedInitialDists(MVNDist &prior, MVNDist &posterior) con
     }
 
     // B1 Correction (fractional)
-    if (use_b1off) 
+    if (use_b1off)
     {
         // Compatibility mode. Note that the high
         // precision here is probably an error but we
@@ -281,8 +281,8 @@ double lin_interp(const ColumnVector &x, const ColumnVector &y, double pos)
 {
     // Determine the value of the function given by (x, y) co-ordinates at
     // the position pos, using a linear interpolation metho
-    
-    // This is complicated by the fact that sometimes x is not strictly 
+
+    // This is complicated by the fact that sometimes x is not strictly
     // increasing which makes interpolation impossible. So we start out
     // by sorting x/y coords into increasing x order
     vector<pair<double, double> > coords;
@@ -607,7 +607,7 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
     if (B1corr > 5.0)
         B1corr = 5.0;
     ColumnVector w1 = w1vec * B1corr; // w1 in radians!
-    
+
     // frequencies for the extra pools
     Matrix exwimat(nexpool, nsamp);
     if (nexpool > 0)
@@ -662,7 +662,7 @@ void CESTFwdModel::Evaluate(const ColumnVector &params, ColumnVector &result, in
             Mz_spectrum(Mztissue, wvec, w1, tsatvec, M0, wimat, kij, T12);
         }
     }
-    
+
     if (m_pvcorr)
     {
         // Partial volume correction is enabled - include a CSF component based on
@@ -786,7 +786,7 @@ void CESTFwdModel::Initialize(ArgsType &args)
     {
         throw invalid_argument("Incorrect number of columns in pool specification file");
     }
-    
+
     // water centre
     float wdefault = 42.58e6 * 3 * 2 * M_PI; // the default centre freq. (3T)
     if (poolmat(1, 1) > 0)
@@ -908,7 +908,7 @@ void CESTFwdModel::Initialize(ArgsType &args)
 
         LOG << "CESTFwdModel::Pulse repeats:" << endl << tsatvec.t() << endl;
 
-        LOG << "CESTFwdModel::Pulse shape:" << endl 
+        LOG << "CESTFwdModel::Pulse shape:" << endl
             << " - Number of segments: " << nseg << endl
             << " - Magnitudes (relative): " << pmagvec.t()
             << " - Durations (s): " << ptvec.t();
@@ -1139,7 +1139,7 @@ ReturnMatrix CESTFwdModel::expm_pade(Matrix inmatrix) const
         }
         i++;
     }
-    
+
     return X;
 }
 
@@ -1312,7 +1312,7 @@ void CESTFwdModel::Mz_spectrum(ColumnVector &Mz, const ColumnVector &wvec, const
                 st = (i - 1) * 3;
                 st2 = (j - 1) * 3;
                 // NB 'reversal' of indices is correct here
-                A.SubMatrix(st + 1, st + 3, st2 + 1, st2 + 3) = I * kij(j, i); 
+                A.SubMatrix(st + 1, st + 3, st2 + 1, st2 + 3) = I * kij(j, i);
             }
         }
     }
@@ -1525,13 +1525,13 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
 
 
      *********************************************************************/
-    
+
     // If not fitting CESTR*, change pool_num to correct rest of logic
     if (pool_num < 0)
     {
         pool_num = npool;
     }
-    
+
     // total number of samples collected
     int nfreq = wvec.Nrows();
 
@@ -1540,7 +1540,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
 
     // Setting number of rows in Relaxation Matrix
     int nRelrows;
-    if ( m_lineshape == "none" || M0.Nrows() == 1 || pool_num != npool) 
+    if ( m_lineshape == "none" || M0.Nrows() == 1 || pool_num != npool)
     {
         nRelrows = mpool * 3;
     }
@@ -1548,7 +1548,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
     {
         nRelrows = (mpool - 1) * 3 + 1;
     }
-    
+
 
     Mz.ReSize(nfreq);
     Mz = 0.0;
@@ -1556,7 +1556,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
     /**********************************************************************
      *					Assemble model matrices
      **********************************************************************/
-    
+
     // Create general purpose Identity Matrix;
     IdentityMatrix Eye(nRelrows);
 
@@ -1567,9 +1567,9 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
     DiagonalMatrix C(nRelrows); C = 0.0;
     ColumnVector M0i(nRelrows); M0i = 0.0;
     DiagonalMatrix Spoil(nRelrows); Spoil = 0.0;
-    
-    
-    if ( m_lineshape == "none" || M0.Nrows() == 1 || pool_num != npool) 
+
+
+    if ( m_lineshape == "none" || M0.Nrows() == 1 || pool_num != npool)
     {
         // Find Diagonals of Relaxation Matrix
         for (int i = 1; i <= mpool; i++)
@@ -1577,7 +1577,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
             k1i(i) = 1 / T12(1, i) + (kij.Row(i)).Sum();
             k2i(i) = 1 / T12(2, i) + (kij.Row(i)).Sum();
         }
-        
+
         // Populate Diagonals of Relaxation Matrix
         for (int i = 1; i <= mpool; i++)
         {
@@ -1605,14 +1605,14 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
                 }
             }
         }
-        
+
         // Create M0i Vector
         for (int i = 1; i <= mpool; i++)
         {
             M0i(i * 3) = M0(i) / M0(1);
         }
         M0i(3) = 1.0;
-        
+
         // Create Excitation Matrix
         for (int i = 0; i < mpool; i++)
         {
@@ -1620,7 +1620,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
             C(3 * i + 2) = sin(w1EX);
             C(3 * i + 3) = cos(w1EX);
         }
-        
+
         // Create Spoiling Matrix Using Square matrix with Transverse elements = 0
         for (int i = 1; i <= mpool; ++i)
         {
@@ -1637,7 +1637,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
             k1i(i) = 1 / T12(1, i) + (kij.Row(i)).Sum();
             k2i(i) = 1 / T12(2, i) + (kij.Row(i)).Sum() - kij(i, mpool);
         }
-        
+
         // Populate Diagonals of Relaxation Matrix
         for (int i = 1; i <= mpool - 1; i++)
         {
@@ -1677,7 +1677,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
             C(3 * i + 3) = cos(w1EX);
         }
         C(nRelrows) = cos(w1EX);
-        
+
         // Create M0i Vector
         for (int i = 2; i <= mpool - 1; i++)
         {
@@ -1693,9 +1693,9 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
             Spoil(st) = 1.0;
         }
         Spoil(nRelrows) = 1.0;
-        
+
     }
-    
+
     // Find Readout Matrix
     // TODO: Need to make TR a ColumnVector so we can use ptvecs with different sizes/nPulses
     double Tr = m_tr;
@@ -1718,8 +1718,8 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
         Tdc = ptvec(ptvec.Nrows());
         iNpSeg = ptvec.Nrows() - 1;
     }
-    
-    // Create Inter-pulse spoiling matrix 
+
+    // Create Inter-pulse spoiling matrix
     // if using shaped pulses with spoiling
     DiagonalMatrix iSpoil(nRelrows);
     if (m_inter_spoil)
@@ -1751,16 +1751,16 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
     /**********************************************************************
      *					Solve for Mz
      **********************************************************************/
-    
+
     Matrix M(nRelrows, nfreq); M = 0.0;
     for (int k = 1; k <= nfreq; k++)
     {
         Matrix Ems(nRelrows, nRelrows); //Ems = Eye;
         Matrix Emt(nRelrows, nRelrows); //Emt = Eye;
-        
+
         for (int jj = 1; jj <= iNpSeg; ++jj)
         {
-            Matrix W(nRelrows, nRelrows); 
+            Matrix W(nRelrows, nRelrows);
             W = 0.0;
             if (m_lineshape == "none" || M0.Nrows() == 1 || pool_num != npool)
             {
@@ -1792,7 +1792,7 @@ void CESTFwdModel::Mz_spectrum_SS(ColumnVector &Mz // Vector: Magnetization
                 W(nRelrows, nRelrows)
                     = -M_PI * gb(k) * 1e-6 * w1(k) * pmagvec(jj) * w1(k) * pmagvec(jj);
             }
-            
+
             Matrix Em = expm((A + W) * ptvec(jj));
 
             if (jj == 1)
