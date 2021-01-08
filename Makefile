@@ -1,8 +1,8 @@
 include ${FSLCONFDIR}/default.mk
 
 PROJNAME = fabber_cest
-LIBS = -lfsl-fabber_models_cest -lfsl-fabberexec -lfsl-fabbercore \
-       -lfsl-newimage -lfsl-miscmaths -lfsl-NewNifti -lfsl-utils \
+LIBS = -lfsl-fabberexec -lfsl-fabbercore -lfsl-newimage \
+       -lfsl-miscmaths -lfsl-NewNifti -lfsl-utils \
        -lfsl-cprob -lfsl-znz -ldl
 XFILES = fabber_cest
 SOFILES = libfsl-fabber_models_cest.so
@@ -26,10 +26,8 @@ all: ${XFILES} ${SOFILES}
 
 # models in a library
 libfsl-fabber_models_cest.so : ${OBJS}
-	${CXX} ${CXXFLAGS} -shared -o $@ $^
+	${CXX} ${CXXFLAGS} -shared -o $@ $^ ${LDFLAGS}
 
 # fabber built from the FSL fabbercore library including the models specifieid in this project
 fabber_cest : fabber_client.o libfsl-fabber_models_cest.so
-	${CXX} ${CXXFLAGS} -o $@ $< ${LDFLAGS}
-
-# DO NOT DELETE
+	${CXX} ${CXXFLAGS} -o $@ $< -lfsl-fabber_models_cest ${LDFLAGS}
