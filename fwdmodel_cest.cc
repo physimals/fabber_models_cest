@@ -39,6 +39,8 @@ static OptionSpec OPTIONS[] = {
     { "pv-threshold", OPT_FLOAT, "Partial volume threshold for including tissue contribution", OPT_NONREQ, "0.5" },
     { "csf-tiss-m0ratio", OPT_FLOAT, "Used for fixing CSF M0 when using partial volume correction", OPT_NONREQ, "0.5269" },
     { "lineshape", OPT_STR, "Saturation lineshape for the MT pool (which must be the last pool specified). Options: gaussian, superlorentzian, lorentzian, none", OPT_NONREQ, "none" },
+    { "t1-rstar", OPT_FLOAT, "Water T1 value for use in CESTR* calculation - if not specified poolmat value is used", OPT_NONREQ, "" },
+    { "t2-rstar", OPT_FLOAT, "Water T2 value for use in CESTR* calculation - if not specified poolmat value is used", OPT_NONREQ, "" },
     { "" },
 };
 
@@ -333,12 +335,15 @@ void CESTFwdModel::EvaluateCestRstar(const ColumnVector &params, ColumnVector &r
     // LOG << "Outputting CESTRstar for pool " << pool_num << endl;
 
     // For this calculation, we use default T1/T2, NOT any inferred values or
-    // image priors
+    // image priors. Note that we may have special T1/T2 values for water
+    // (t1_rstar/t2_rstar) which may differ from the values in T12master
     ColumnVector mod_params = params;
     if (t12soft)
     {
         int t12_idx = (npool - 1) * 3 + 3 + (inferdrift ? 1 : 0);
-        for (int i = 1; i <= npool; i++)
+        mod_params(t12_idx + 1) = t1_rstar;
+        mod_params(t12_idx + npool + 1) = t2_rstar;
+        for (int i = 2; i <= npool; i++)
         {
             mod_params(t12_idx + i) = T12master(1, i);
             mod_params(t12_idx + npool + i) = T12master(2, i);
@@ -794,6 +799,8 @@ void CESTFwdModel::Initialize(ArgsType &args)
     poolk = log(poolmat.SubMatrix(2, npool, 2, 2)); // NOTE the log_e transformation
     // T1 and T2 values
     T12master = (poolmat.SubMatrix(1, npool, 3, 4)).t();
+    t1_rstar = args.GetDoubleDefault("t1-rstar", T12master(1, 1));
+    t2_rstar = args.GetDoubleDefault("t2-rstar", T12master(2, 1));
 
     if (poolmat.Ncols() > 4)
     {
@@ -847,16 +854,18 @@ void CESTFwdModel::Initialize(ArgsType &args)
     tsatvec = dataspec.Column(3);
 
     LOG << "CESTFwdModel::Pools: " << endl;
-    LOG << " - Water - freq. (MHz) = " << wlam / 2 / M_PI << endl;
-    LOG << "           T1    (s)   = " << T12master(1, 1) << endl;
-    LOG << "           T2    (s)   = " << T12master(2, 1) << endl;
+    LOG << " - Water - freq. (MHz)      = " << wlam / 2 / M_PI << endl;
+    LOG << "         -  T1    (s)       = " << T12master(1, 1) << endl;
+    LOG << "         -  T2    (s)       = " << T12master(2, 1) << endl;
+    LOG << "         -  T1    (CESTR*)  = " << t1_rstar << endl;
+    LOG << "         -  T2    (CESTR*)  = " << t2_rstar << endl;
 
     for (int i = 2; i <= npool; i++)
     {
-        LOG << " - Pool " << i << " - freq. (ppm)  = " << poolppm(i - 1) << endl;
-        LOG << "         - kiw   (s^-1) = " << exp(poolk(i - 1)) << endl;
-        LOG << "         - T1    (s)    = " << T12master(1, i) << endl;
-        LOG << "         - T2    (s)    = " << T12master(2, i) << endl;
+        LOG << " - Pool " << i << " - freq. (ppm)     = " << poolppm(i - 1) << endl;
+        LOG << "          - kiw   (s^-1)    = " << exp(poolk(i - 1)) << endl;
+        LOG << "          - T1    (s)       = " << T12master(1, i) << endl;
+        LOG << "          - T2    (s)       = " << T12master(2, i) << endl;
     }
 
     LOG << "CESTFwdModel::Sampling frequencies (ppm):" << endl

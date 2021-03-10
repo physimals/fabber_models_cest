@@ -101,6 +101,7 @@ protected:
     NEWMAT::ColumnVector poolppm;
     NEWMAT::ColumnVector poolk;
     NEWMAT::Matrix T12master;
+    double t1_rstar, t2_rstar;
     NEWMAT::ColumnVector poolcon;
     NEWMAT::ColumnVector poolconprec;
 
