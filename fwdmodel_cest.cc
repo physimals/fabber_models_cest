@@ -14,8 +14,17 @@
 #include "armawrap/newmat.h"
 #include <iostream>
 #include <stdexcept>
-using namespace NEWIMAGE;
 #include "fabber_core/easylog.h"
+
+using namespace NEWIMAGE;
+using NEWMAT::RowVector;
+using NEWMAT::ColumnVector;
+using NEWMAT::Matrix;
+using NEWMAT::IdentityMatrix;
+using NEWMAT::DiagonalMatrix;
+using NEWMAT::SymmetricMatrix;
+using NEWMAT::ReturnMatrix;
+using MISCMATHS::read_ascii_matrix;
 
 FactoryRegistration<FwdModelFactory, CESTFwdModel> CESTFwdModel::registration("cest");
 
@@ -796,7 +805,7 @@ void CESTFwdModel::Initialize(ArgsType &args)
     // ppm ofsets
     poolppm = poolmat.SubMatrix(2, npool, 1, 1);
     // exchange rate
-    poolk = log(poolmat.SubMatrix(2, npool, 2, 2)); // NOTE the log_e transformation
+    poolk = MISCMATHS::log(poolmat.SubMatrix(2, npool, 2, 2)); // NOTE the log_e transformation
     // T1 and T2 values
     T12master = (poolmat.SubMatrix(1, npool, 3, 4)).t();
     t1_rstar = args.GetDoubleDefault("t1-rstar", T12master(1, 1));
@@ -1206,7 +1215,7 @@ ReturnMatrix CESTFwdModel::PadeApproximant(Matrix inmatrix, int m, int &s) const
         s = std::max(ceil(log2(eta5 / thetam)), 0.0);
 
         Matrix sT = std::pow(1.0 / 113250775606021113483283660800000000.0, 1.0 / (2 * m + 1))
-            * abs(A * MISCMATHS::pow(half, s));
+            * MISCMATHS::abs(A * MISCMATHS::pow(half, s));
         sT = mpower(sT, 2 * m + 1);
         double alpha = sT.Norm1() / A.Norm1();
         s += std::max(ceil(log2(2 * alpha / (nextafter(1.0, 2.0) - 1.0)) / (2.0 * m)), 0.0);
@@ -2033,7 +2042,7 @@ ReturnMatrix CESTFwdModel::absLineShape(const ColumnVector &gbInMat, double T2) 
     }
     else if (m_lineshape == "Gaussian" || m_lineshape == "gaussian")
     {
-        ColumnVector g = (T2 / sqrt(2 * M_PI)) * exp(-spower_Mat(gbInMat, 2) * T2 * T2 / 2) * 1e6;
+        ColumnVector g = (T2 / sqrt(2 * M_PI)) * MISCMATHS::exp(-spower_Mat(gbInMat, 2) * T2 * T2 / 2) * 1e6;
         return g;
     }
     else
