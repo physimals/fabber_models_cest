@@ -29,5 +29,5 @@ libfsl-fabber_models_cest.so : ${OBJS}
 	${CXX} ${CXXFLAGS} -shared -o $@ $^ ${LDFLAGS}
 
 # fabber built from the FSL fabbercore library including the models specifieid in this project
-fabber_cest : fabber_client.o libfsl-fabber_models_cest.so
+fabber_cest : fabber_client.o | libfsl-fabber_models_cest.so
 	${CXX} ${CXXFLAGS} -o $@ $< -lfsl-fabber_models_cest ${LDFLAGS}
